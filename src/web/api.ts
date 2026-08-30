@@ -1,4 +1,5 @@
 import type {
+  CapabilityReport,
   ConnectionStatus,
   InvestigationOffer,
   Report,
@@ -31,6 +32,8 @@ export const api = {
   refresh: () => call<{ metricCount: number }>('/api/refresh', { method: 'POST' }),
 
   targets: () => call<Target[]>('/api/targets'),
+
+  capabilities: () => call<CapabilityReport>('/api/capabilities'),
 
   narrowingLabels: (job: string) => call<string[]>(`/api/targets/${encodeURIComponent(job)}/labels`),
 

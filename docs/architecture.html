@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Architecture — PromQL Helper</title>
+    <meta
+      name="description"
+      content="How PromQL Helper is put together: the request path and where the token lives, how abstract signals resolve to real metric names, and the three scopes."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/docs.css" />
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+
+    <div class="layout">
+      <aside class="rail">
+        <a class="mark" href="index.html">
+          <span class="mark-name">PromQL Helper</span>
+          <span class="mark-sub">Documentation</span>
+        </a>
+        <nav class="rail-nav" aria-label="Documentation">
+          <div class="rail-group">
+            <p class="rail-label">Guide</p>
+            <ul class="rail-list">
+              <li><a href="index.html">Overview</a></li>
+              <li><a href="guide.html">Walkthrough</a></li>
+              <li><a href="investigations.html">Investigations</a></li>
+              <li><a href="architecture.html" aria-current="page">Architecture</a></li>
+              <li><a href="reference.html">Reference</a></li>
+            </ul>
+          </div>
+          <div class="rail-group">
+            <p class="rail-label">On this page</p>
+            <ul class="rail-list">
+              <li><a href="#shape">The shape of it</a></li>
+              <li><a href="#resolution">How a question becomes a query</a></li>
+              <li><a href="#scopes">Three scopes</a></li>
+              <li><a href="#modules">Where each part lives</a></li>
+            </ul>
+          </div>
+        </nav>
+      </aside>
+
+      <main id="content">
+        <p class="eyebrow">Architecture</p>
+        <h1>How it works</h1>
+        <p class="lede">
+          Three pictures cover most of it: what talks to what, how a plain-language question turns
+          into PromQL that matches your metric names, and why some metrics are matched by job while
+          others are matched by pod.
+        </p>
+
+        <h2 id="shape">The shape of it</h2>
+
+        <p>
+          One Node process sits between the browser and Prometheus. It is not a passthrough proxy —
+          the browser never names a metric or writes a query. It asks for an <em>investigation</em>,
+          and gets back a finished report.
+        </p>
+
+        <figure class="diagram">
+          <svg
+            viewBox="0 0 780 240"
+            role="img"
+            aria-label="The browser calls this app's own /api on the same origin and receives finished JSON reports. The Node process reads PROMETHEUS_TOKEN, adds an Authorization Bearer header, and calls the Prometheus HTTP API. The token exists only in the middle process."
+          >
+            <defs>
+              <marker
+                id="ah"
+                viewBox="0 0 8 8"
+                refX="7"
+                refY="4"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto"
+              >
+                <polygon class="d-arrow" points="0,0 8,4 0,8" />
+              </marker>
+            </defs>
+
+            <rect class="d-box" x="16" y="68" width="182" height="100" rx="8" />
+            <text class="d-title" x="107" y="102" text-anchor="middle">Browser</text>
+            <text class="d-text" x="107" y="122" text-anchor="middle">React wizard</text>
+            <text class="d-mono-dim" x="107" y="146" text-anchor="middle">no token, ever</text>
+
+            <rect class="d-box" x="282" y="40" width="240" height="158" rx="8" />
+            <text class="d-title" x="402" y="70" text-anchor="middle">Node process</text>
+            <text class="d-text" x="402" y="89" text-anchor="middle">Hono API</text>
+            <line class="d-rule" x1="296" y1="103" x2="508" y2="103" />
+            <text class="d-mono-dim" x="402" y="123" text-anchor="middle">routes · engine · signals</text>
+            <text class="d-mono-dim" x="402" y="140" text-anchor="middle">playbooks · catalog</text>
+            <line class="d-rule" x1="296" y1="154" x2="508" y2="154" />
+            <text class="d-text" x="402" y="173" text-anchor="middle">reads PROMETHEUS_TOKEN</text>
+            <text class="d-mono-dim" x="402" y="189" text-anchor="middle">adds Authorization: Bearer</text>
+
+            <rect class="d-box" x="606" y="68" width="158" height="100" rx="8" />
+            <text class="d-title" x="685" y="102" text-anchor="middle">Prometheus</text>
+            <text class="d-text" x="685" y="122" text-anchor="middle">HTTP API</text>
+            <text class="d-mono-dim" x="685" y="146" text-anchor="middle">/api/v1/query…</text>
+
+            <line class="d-line" x1="200" y1="104" x2="274" y2="104" marker-end="url(#ah)" />
+            <text class="d-edge" x="237" y="96" text-anchor="middle">ask</text>
+            <line class="d-line" x1="274" y1="148" x2="200" y2="148" marker-end="url(#ah)" />
+            <text class="d-edge" x="237" y="166" text-anchor="middle">report JSON</text>
+
+            <line class="d-line" x1="524" y1="104" x2="598" y2="104" marker-end="url(#ah)" />
+            <text class="d-edge" x="561" y="96" text-anchor="middle">PromQL</text>
+            <line class="d-line" x1="598" y1="148" x2="524" y2="148" marker-end="url(#ah)" />
+            <text class="d-edge" x="561" y="166" text-anchor="middle">samples</text>
+          </svg>
+          <figcaption>
+            The bearer token is read from the environment by the Node process and attached there. It
+            is never sent to the browser, so it cannot appear in a network tab, a bookmark, or a
+            screenshot. In production a single process serves both the API and the built UI, so
+            there is no cross-origin surface at all.
+          </figcaption>
+        </figure>
+
+        <h2 id="resolution">How a question becomes a query</h2>
+
+        <p>
+          This is the part that makes the same investigation work on services instrumented
+          differently. Playbooks never mention a metric name. They ask for a <strong>signal</strong>
+          — <code>http.requests.count</code> — and the resolver works out what your Prometheus calls
+          it.
+        </p>
+
+        <figure class="diagram">
+          <svg
+            viewBox="0 0 780 536"
+            role="img"
+            aria-label="A question maps to abstract signals; each signal has candidate metric names per instrumentation convention; a single instant query establishes which of those names exist for the selected job; the winning candidate supplies both the metric name and its label names; panels then build PromQL, run it, and interpret the result into a verdict."
+          >
+            <defs>
+              <marker
+                id="ah2"
+                viewBox="0 0 8 8"
+                refX="7"
+                refY="4"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto"
+              >
+                <polygon class="d-arrow" points="0,0 8,4 0,8" />
+              </marker>
+              <marker
+                id="ah2k"
+                viewBox="0 0 8 8"
+                refX="7"
+                refY="4"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto"
+              >
+                <polygon class="d-arrow-key" points="0,0 8,4 0,8" />
+              </marker>
+            </defs>
+
+            <rect class="d-box-key" x="170" y="14" width="440" height="42" rx="21" />
+            <text class="d-key-text" x="390" y="40" text-anchor="middle">
+              Is this service serving happy users?
+            </text>
+            <line class="d-line" x1="390" y1="58" x2="390" y2="80" marker-end="url(#ah2)" />
+
+            <rect class="d-box" x="110" y="82" width="560" height="62" rx="8" />
+            <text class="d-title" x="390" y="106" text-anchor="middle">
+              the playbook asks for abstract signals
+            </text>
+            <text class="d-mono" x="390" y="128" text-anchor="middle">
+              http.requests.count · http.latency.histogram
+            </text>
+            <line class="d-line" x1="390" y1="146" x2="390" y2="168" marker-end="url(#ah2)" />
+
+            <rect class="d-box-soft" x="110" y="170" width="560" height="112" rx="8" />
+            <text class="d-title" x="128" y="192">each signal lists candidates, in preference order</text>
+            <text class="d-mono-dim" x="128" y="216">Micrometer</text>
+            <text class="d-mono" x="272" y="216">http_server_requests_seconds_count</text>
+            <text class="d-mono-dim" x="128" y="238">OpenTelemetry</text>
+            <text class="d-mono" x="272" y="238">http_server_request_duration_seconds_count</text>
+            <text class="d-mono-dim" x="128" y="260">Prometheus client</text>
+            <text class="d-mono" x="272" y="260">http_request_duration_seconds_count</text>
+
+            <line class="d-line-key" x1="390" y1="284" x2="390" y2="314" marker-end="url(#ah2k)" />
+            <text class="d-edge" x="402" y="303">one instant query, not one per candidate</text>
+
+            <rect class="d-box-key" x="110" y="316" width="560" height="46" rx="8" />
+            <text class="d-mono" x="390" y="344" text-anchor="middle">
+              count by (__name__) ({__name__=~"a|b|c", job="checkout-api"})
+            </text>
+            <line class="d-line-key" x1="390" y1="364" x2="390" y2="392" marker-end="url(#ah2k)" />
+
+            <rect class="d-box-key" x="110" y="394" width="560" height="58" rx="8" />
+            <text class="d-mono" x="390" y="418" text-anchor="middle">
+              http_server_requests_seconds_count
+            </text>
+            <text class="d-mono-dim" x="390" y="438" text-anchor="middle">
+              Micrometer · route=uri · status=status
+            </text>
+            <polyline
+              class="d-line"
+              points="390,454 390,466 190,466 190,474"
+              marker-end="url(#ah2)"
+            />
+
+            <rect class="d-box" x="110" y="478" width="160" height="38" rx="8" />
+            <text class="d-text" x="190" y="502" text-anchor="middle">build PromQL</text>
+            <line class="d-line" x1="272" y1="497" x2="298" y2="497" marker-end="url(#ah2)" />
+
+            <rect class="d-box" x="300" y="478" width="160" height="38" rx="8" />
+            <text class="d-text" x="380" y="502" text-anchor="middle">run it</text>
+            <line class="d-line" x1="462" y1="497" x2="488" y2="497" marker-end="url(#ah2)" />
+
+            <rect class="d-box" x="490" y="478" width="180" height="38" rx="8" />
+            <text class="d-text" x="580" y="502" text-anchor="middle">interpret → verdict</text>
+          </svg>
+          <figcaption>
+            Every candidate across every signal is folded into one <code>__name__=~"…"</code> matcher
+            scoped to the job, so a single round trip establishes which metrics exist here and how
+            many series each has. The winning candidate carries its label names too — Micrometer
+            calls the path <code>uri</code>, OpenTelemetry calls it <code>http_route</code> — so
+            panels ask for the <em>role</em> and get whatever this convention uses.
+          </figcaption>
+        </figure>
+
+        <div class="note tip">
+          <span class="note-label">Why one query</span>
+          <p>
+            Probing 87 metric names individually would be 87 round trips on every page load.
+            Candidates are first filtered against the cached metric catalogue, so the regex only
+            ever contains names that exist somewhere, and the result doubles as a cardinality check.
+          </p>
+        </div>
+
+        <h2 id="scopes">Three scopes</h2>
+
+        <p>
+          Picking a job is not enough, because the metrics that describe a service are not all
+          scraped from it. This is the single most common source of confusion, and the reason the
+          app asks for a job <em>and</em> sometimes an exporter.
+        </p>
+
+        <figure class="diagram">
+          <svg
+            viewBox="0 0 780 276"
+            role="img"
+            aria-label="Choosing one job produces three different selectors: target scope filters by that job, dependency scope filters by a separate exporter job the user picks, and infra scope filters by namespace and pod derived from the application's own series."
+          >
+            <defs>
+              <marker
+                id="ah3"
+                viewBox="0 0 8 8"
+                refX="7"
+                refY="4"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto"
+              >
+                <polygon class="d-arrow" points="0,0 8,4 0,8" />
+              </marker>
+            </defs>
+
+            <rect class="d-box-key" x="270" y="12" width="240" height="38" rx="19" />
+            <text class="d-key-text" x="390" y="36" text-anchor="middle">you pick one job</text>
+
+            <line class="d-line" x1="390" y1="52" x2="390" y2="72" />
+            <line class="d-line" x1="150" y1="72" x2="630" y2="72" />
+            <line class="d-line" x1="150" y1="72" x2="150" y2="94" marker-end="url(#ah3)" />
+            <line class="d-line" x1="390" y1="72" x2="390" y2="94" marker-end="url(#ah3)" />
+            <line class="d-line" x1="630" y1="72" x2="630" y2="94" marker-end="url(#ah3)" />
+
+            <rect class="d-box" x="50" y="96" width="200" height="156" rx="8" />
+            <text class="d-title" x="150" y="122" text-anchor="middle">target</text>
+            <text class="d-text" x="150" y="144" text-anchor="middle">the app itself</text>
+            <text class="d-mono" x="150" y="176" text-anchor="middle">job="checkout-api"</text>
+            <line class="d-rule" x1="70" y1="196" x2="230" y2="196" />
+            <text class="d-mono-dim" x="150" y="216" text-anchor="middle">HTTP · JVM · pools</text>
+            <text class="d-mono-dim" x="150" y="234" text-anchor="middle">its /metrics endpoint</text>
+
+            <rect class="d-box" x="290" y="96" width="200" height="156" rx="8" />
+            <text class="d-title" x="390" y="122" text-anchor="middle">dependency</text>
+            <text class="d-text" x="390" y="144" text-anchor="middle">a datastore exporter</text>
+            <text class="d-mono" x="390" y="176" text-anchor="middle">job="redis"</text>
+            <line class="d-rule" x1="310" y1="196" x2="470" y2="196" />
+            <text class="d-mono-dim" x="390" y="216" text-anchor="middle">Redis · Postgres</text>
+            <text class="d-mono-dim" x="390" y="234" text-anchor="middle">you choose which</text>
+
+            <rect class="d-box" x="530" y="96" width="200" height="156" rx="8" />
+            <text class="d-title" x="630" y="122" text-anchor="middle">infra</text>
+            <text class="d-text" x="630" y="144" text-anchor="middle">the container platform</text>
+            <text class="d-mono" x="630" y="172" text-anchor="middle">namespace=~"shop",</text>
+            <text class="d-mono" x="630" y="188" text-anchor="middle">pod=~"checkout-api-…"</text>
+            <line class="d-rule" x1="550" y1="204" x2="710" y2="204" />
+            <text class="d-mono-dim" x="630" y="222" text-anchor="middle">cAdvisor · kube-state</text>
+            <text class="d-mono-dim" x="630" y="240" text-anchor="middle">derived, not chosen</text>
+          </svg>
+          <figcaption>
+            cAdvisor and kube-state-metrics scrape under their own jobs and are keyed by namespace
+            and pod, so <code>job="checkout-api"</code> would never match them. The app asks
+            Prometheus which namespace and pods the application's <em>own</em> series carry, and
+            builds a selector from that.
+          </figcaption>
+        </figure>
+
+        <div class="note watch">
+          <span class="note-label">When derivation fails</span>
+          <p>
+            If your application's metrics carry no <code>namespace</code> or <code>pod</code> label,
+            there is no honest way to connect them to container metrics. Those signals are then
+            reported as gaps with an explanation, rather than matched cluster-wide — which would
+            produce plausible numbers describing the wrong containers.
+          </p>
+        </div>
+
+        <h2 id="modules">Where each part lives</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Responsibility</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>server/config.ts</code></td>
+                <td>Reads and validates the environment. Exits with an explanation if unusable.</td>
+              </tr>
+              <tr>
+                <td><code>server/prom.ts</code></td>
+                <td>
+                  The only place that talks to Prometheus. POSTs queries, GETs metadata, attaches
+                  auth, turns NaN into a genuine gap rather than a zero.
+                </td>
+              </tr>
+              <tr>
+                <td><code>server/catalog.ts</code></td>
+                <td>
+                  Cached metric catalogue, job discovery, selector building and escaping, and the
+                  namespace/pod derivation behind the infra scope.
+                </td>
+              </tr>
+              <tr>
+                <td><code>server/signals.ts</code></td>
+                <td>
+                  The registry: abstract signals, candidate metric names per convention, label-role
+                  mapping. This is the file you extend for a stack it does not recognise.
+                </td>
+              </tr>
+              <tr>
+                <td><code>server/playbooks/</code></td>
+                <td>
+                  One file per investigation. Each panel declares what it needs, builds its PromQL,
+                  and carries the rule that turns its numbers into a sentence.
+                </td>
+              </tr>
+              <tr>
+                <td><code>server/engine.ts</code></td>
+                <td>
+                  Resolve, filter panels to what can run, execute with bounded concurrency,
+                  interpret, roll up to a verdict.
+                </td>
+              </tr>
+              <tr>
+                <td><code>server/capabilities.ts</code></td>
+                <td>The audit behind the in-app Help page: the whole registry, checked against this Prometheus.</td>
+              </tr>
+              <tr>
+                <td><code>web/</code></td>
+                <td>
+                  The wizard and the Help page. Charts are hand-authored SVG — no chart library.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          The dependency arrow only ever points one way:
+          <code>playbooks → signals → catalog → prom</code>. A playbook cannot reach Prometheus
+          directly, which is what keeps a panel definition to a query and a threshold.
+        </p>
+
+        <nav class="pager">
+          <a href="investigations.html">
+            <span class="dir">Previous</span>
+            <span class="to">← Investigations</span>
+          </a>
+          <a href="reference.html">
+            <span class="dir">Next</span>
+            <span class="to">Reference →</span>
+          </a>
+        </nav>
+      </main>
+    </div>
+
+    <script src="assets/docs.js" defer></script>
+  </body>
+</html>

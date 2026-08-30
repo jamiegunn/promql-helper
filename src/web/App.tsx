@@ -12,8 +12,10 @@ import { api } from './api.ts'
 import { StepTarget } from './components/StepTarget.tsx'
 import { StepQuestion } from './components/StepQuestion.tsx'
 import { StepReport } from './components/StepReport.tsx'
+import { HelpPage } from './components/HelpPage.tsx'
 
 type Step = 'target' | 'question' | 'report'
+type View = 'wizard' | 'help'
 
 const STEP_LABELS: Record<Step, string> = {
   target: 'Pick a service',
@@ -24,6 +26,7 @@ const STEP_LABELS: Record<Step, string> = {
 export function App() {
   const [status, setStatus] = useState<ConnectionStatus | null>(null)
   const [step, setStep] = useState<Step>('target')
+  const [view, setView] = useState<View>('wizard')
   const [error, setError] = useState<string | null>(null)
 
   const [targets, setTargets] = useState<Target[]>([])
@@ -87,6 +90,12 @@ export function App() {
           PromQL Helper
           <span>diagnose a service from its metrics</span>
         </div>
+        <button
+          className={view === 'help' ? 'btn btn-primary' : 'btn'}
+          onClick={() => setView(view === 'help' ? 'wizard' : 'help')}
+        >
+          {view === 'help' ? '← Back to the wizard' : 'Help'}
+        </button>
         <div className="conn">
           <span
             className={`dot ${status === null ? 'pending' : status.connected ? 'up' : 'down'}`}
@@ -100,7 +109,9 @@ export function App() {
         </div>
       </header>
 
-      <nav className="stepper" aria-label="Progress">
+      {view === 'help' && <HelpPage />}
+
+      <nav className="stepper" aria-label="Progress" hidden={view === 'help'}>
         {(['target', 'question', 'report'] as Step[]).map((id, index) => {
           const order: Step[] = ['target', 'question', 'report']
           const current = order.indexOf(step)
@@ -136,9 +147,9 @@ export function App() {
         </div>
       )}
 
-      {error && <div className="banner">{error}</div>}
+      {view === 'wizard' && error && <div className="banner">{error}</div>}
 
-      {step === 'target' && (
+      {view === 'wizard' && step === 'target' && (
         <StepTarget
           targets={targets}
           job={job}
@@ -152,7 +163,7 @@ export function App() {
         />
       )}
 
-      {step === 'question' && job && (
+      {view === 'wizard' && step === 'question' && job && (
         <StepQuestion
           job={job}
           offers={offers}
@@ -164,7 +175,7 @@ export function App() {
         />
       )}
 
-      {step === 'report' && report && (
+      {view === 'wizard' && step === 'report' && report && (
         <StepReport
           report={report}
           range={range}

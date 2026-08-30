@@ -15,7 +15,7 @@ import { chromium } from 'playwright'
 // http://localhost:8090/promql_helper/ to check the relative links behave the
 // way they will on a GitHub Pages project site.
 const BASE = process.env.BASE ?? 'http://localhost:8090/'
-const PAGES = ['index.html', 'guide.html', 'investigations.html', 'reference.html']
+const PAGES = ['index.html', 'guide.html', 'investigations.html', 'architecture.html', 'reference.html']
 
 const browser = await chromium.launch()
 let bad = 0

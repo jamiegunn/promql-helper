@@ -14,6 +14,7 @@ import {
   narrowingValuesFor,
 } from './catalog.ts'
 import { offerInvestigations, runInvestigation } from './engine.ts'
+import { buildCapabilityReport } from './capabilities.ts'
 import {
   PortUnavailable,
   describePortOwner,
@@ -56,6 +57,15 @@ app.post('/api/refresh', async (c) => {
 })
 
 app.get('/api/ranges', (c) => c.json(TIME_RANGES))
+
+app.get('/api/capabilities', async (c) => {
+  try {
+    return c.json(await buildCapabilityReport())
+  } catch (err) {
+    const { error, status } = fail(err)
+    return c.json({ error }, status as 500)
+  }
+})
 
 app.get('/api/targets', async (c) => {
   try {

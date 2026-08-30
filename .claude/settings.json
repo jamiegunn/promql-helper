@@ -3,6 +3,7 @@
   "permissions": {
     "allow": [
       "Bash(echo *)",
+      "Bash(cat *)",
       "Bash(npm *)",
       "Bash(npx *)",
       "Bash(node scripts/*)",
@@ -23,14 +24,21 @@
 
       "Bash(docker *)",
 
-      "Bash(curl -s localhost:*)",
-      "Bash(curl -s http://localhost:*)",
-      "Bash(curl -s -o /dev/null*)",
+      "Bash(curl *)",
 
       "Bash(lsof *)",
       "Bash(ps *)",
-      "Bash(pkill -f *)",
+      "Bash(pkill *)",
+      "Bash(kill *)",
       "Bash(python3 *)",
+      "Bash(grep *)",
+      "Bash(rg *)",
+      "Bash(sed *)",
+      "Bash(find *)",
+      "Bash(ls *)",
+      "Bash(wc *)",
+      "Bash(head *)",
+      "Bash(tail *)",
 
       "Read(//tmp/**)",
       "Read(//private/tmp/**)"

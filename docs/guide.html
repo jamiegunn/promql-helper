@@ -32,6 +32,7 @@
               <li><a href="index.html">Overview</a></li>
               <li><a href="guide.html" aria-current="page">Walkthrough</a></li>
               <li><a href="investigations.html">Investigations</a></li>
+              <li><a href="architecture.html">Architecture</a></li>
               <li><a href="reference.html">Reference</a></li>
             </ul>
           </div>
@@ -43,6 +44,7 @@
               <li><a href="#step-3">3 · Read the answer</a></li>
               <li><a href="#panels">Working a panel</a></li>
               <li><a href="#evidence">Checking the evidence</a></li>
+              <li><a href="#help">Auditing what it can do</a></li>
               <li><a href="#unavailable">When a question is greyed out</a></li>
               <li><a href="#worked">A worked example</a></li>
             </ul>
@@ -453,6 +455,21 @@
             <a href="reference.html#extending">Reference → Teaching it your metric names</a>.
           </figcaption>
         </figure>
+
+        <h2 id="help">Auditing what the app can do</h2>
+
+        <p>
+          The <strong>Help</strong> button in the top bar opens a full audit: every metric name the
+          app knows how to look for, which instrumentation convention it belongs to, whether it
+          exists in your Prometheus, and which checks it unlocks. Filter it to
+          <strong>Not found</strong> to see exactly what is missing and what would produce it.
+        </p>
+
+        <p>
+          This is the honest answer to "what does this thing actually cover?" — the list is the
+          whole registry, not a sample. If a metric you expose is not in it, the app will not use
+          it, and the page tells you where to add it.
+        </p>
 
         <h2 id="unavailable">When a question is greyed out</h2>
 

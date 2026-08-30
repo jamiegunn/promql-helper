@@ -65,20 +65,88 @@ npm run dev                 # API :8787, UI :5173
 PORT=8788 npm run dev       # API :8788, UI :5174 — talks to its own API
 ```
 
-### Configuration
+## Configuration
 
-Only two variables matter:
+Settings come from `.env` in the project root, or from real environment
+variables. A real environment variable always wins, so the same image can be
+deployed with `-e PROMETHEUS_URL=…` and no file at all.
 
-| Variable | Meaning |
-|---|---|
-| `PROMETHEUS_URL` | Base URL of the Prometheus HTTP API. No trailing `/api/v1`. |
-| `PROMETHEUS_TOKEN` | Bearer token, sent as `Authorization: Bearer …`. Omit for an unauthenticated Prometheus. |
+Start from the template:
 
-`.env.example` documents the optional ones (timeouts, extra proxy headers, TLS
-skip, catalog cache TTL).
+```bash
+cp .env.example .env
+```
 
-**The token never reaches the browser.** All Prometheus traffic goes through the
-Node process; the frontend only ever talks to this app's own `/api`.
+### Every variable
+
+| Variable | Default | What it does |
+|---|---|---|
+| `PROMETHEUS_URL` | — | **Required.** Base URL of the Prometheus HTTP API, no trailing `/api/v1`. The process exits with an explanation if it is unset. |
+| `PROMETHEUS_TOKEN` | empty | Bearer token. Sent as `Authorization: Bearer <token>`. Leave unset for an unauthenticated Prometheus. |
+| `PROMETHEUS_HEADERS` | empty | Extra headers as a JSON object. For basic auth, tenant IDs, or an access proxy. |
+| `PROMETHEUS_INSECURE` | `0` | `1` skips TLS verification. Disables it for the whole process — self-signed certs on a trusted network only. |
+| `PROMETHEUS_TIMEOUT_MS` | `30000` | Abandon a Prometheus request after this long. Raise it if long range queries time out. |
+| `CATALOG_TTL_SECONDS` | `300` | How long the metric catalogue is cached. It changes rarely and is expensive to fetch. |
+| `PORT` | `8787` | Port the API listens on. The Vite dev server reads it too. |
+| `PORT_TAKEOVER` | `0` | `1` stops an existing server holding that port instead of failing. Only ever stops a server from this same directory. |
+
+### Authenticating
+
+**Bearer token** — the common case, and what most Prometheus deployments behind
+an ingress or an OAuth proxy expect:
+
+```bash
+PROMETHEUS_URL=https://prometheus.internal.example.com
+PROMETHEUS_TOKEN=eyJhbGciOi...
+```
+
+That is sent as `Authorization: Bearer eyJhbGciOi...` on every request.
+
+**Basic auth** — leave `PROMETHEUS_TOKEN` empty and set the header yourself.
+Anything in `PROMETHEUS_HEADERS` is sent as-is, and `Authorization` is only
+overwritten when a bearer token is also set:
+
+```bash
+PROMETHEUS_TOKEN=
+PROMETHEUS_HEADERS={"Authorization":"Basic dXNlcjpwYXNzd29yZA=="}
+```
+
+Generate the value with `printf 'user:password' | base64`.
+
+**Multi-tenant or behind a proxy** — add whatever headers it needs. These
+combine with a bearer token:
+
+```bash
+PROMETHEUS_TOKEN=eyJhbGciOi...
+PROMETHEUS_HEADERS={"X-Scope-OrgID":"team-payments","CF-Access-Client-Id":"..."}
+```
+
+**Not supported:** AWS SigV4 request signing, so Amazon Managed Prometheus will
+not work without a sidecar proxy such as `aws-sigv4-proxy` in front of it. Point
+`PROMETHEUS_URL` at the proxy.
+
+> **The token never reaches the browser.** It is read by the Node process and
+> attached there. The frontend only ever calls this app's own `/api`, so the
+> token cannot appear in a network tab, a bookmark, or a screenshot. In
+> production a single process serves both the API and the built UI, so there is
+> no cross-origin surface at all.
+
+### Checking it worked
+
+```bash
+curl -s localhost:8787/api/health
+```
+
+```json
+{"connected":true,"url":"https://prometheus...","authenticated":true,"version":"3.13.0","metricCount":4821}
+```
+
+`authenticated` reports whether a bearer token is configured, not whether the
+server demanded one. If `connected` is false the `error` field says why — a
+wrong URL, a rejected token, and a timeout each produce a different message.
+
+Then open the app and click **Help** to see every metric it knows how to look
+for, and which of them exist in your Prometheus.
 
 ---
 
@@ -118,6 +186,43 @@ the card explains what to instrument.
 ---
 
 ## How it works
+
+One Node process sits between the browser and Prometheus. It is not a
+passthrough proxy — the browser never names a metric or writes a query. It asks
+for an *investigation* and gets back a finished report.
+
+```mermaid
+flowchart LR
+    B["Browser<br/>React wizard<br/>no token, ever"]
+    S["Node process — Hono<br/>routes · engine · signals<br/>playbooks · catalog<br/>adds Authorization: Bearer"]
+    P["Prometheus<br/>HTTP API"]
+
+    B -- "ask" --> S
+    S -- "report JSON" --> B
+    S -- "PromQL" --> P
+    P -- "samples" --> S
+```
+
+The interesting part is how a plain-language question becomes PromQL that
+matches *your* metric names:
+
+```mermaid
+flowchart TD
+    Q["Is this service serving happy users?"]
+    A["the playbook asks for abstract signals<br/>http.requests.count · http.latency.histogram"]
+    C["each signal lists candidates, in preference order<br/>Micrometer · OpenTelemetry · Prometheus client"]
+    R["resolved for this job<br/>http_server_requests_seconds_count<br/>route=uri · status=status"]
+    P1["build PromQL"]
+    P2["run it"]
+    P3["interpret to a verdict"]
+
+    Q --> A --> C
+    C -- "one instant query, not one per candidate" --> R
+    R --> P1 --> P2 --> P3
+```
+
+There is a fuller version of this, plus the three scopes and a module map, in
+[the architecture page](https://jamiegunn.github.io/promql-helper/architecture.html).
 
 ### Signals, not metric names
 
@@ -165,9 +270,10 @@ src/
     catalog.ts             Cached metric catalog, target discovery, selector building
     signals.ts             The signal registry — where new conventions get added
     engine.ts              Resolve → filter panels → run → interpret → verdict
+    capabilities.ts        The audit behind the in-app Help page
     playbooks/             One file per investigation
     index.ts               HTTP routes
-  web/                     React wizard; hand-rolled SVG charts, no chart library
+  web/                     React wizard and Help page; hand-rolled SVG charts, no chart library
 scripts/
   fake-exporters.ts        Synthetic metrics for the demo
   prometheus.yml           Scrape config for the demo

@@ -538,6 +538,112 @@ figcaption {
   max-width: var(--measure);
 }
 
+/* --- Diagrams -------------------------------------------------------------
+   Hand-authored inline SVG. Everything is styled from here rather than from
+   inside the SVG, so both themes come from the same tokens as the rest of the
+   page and the markup stays readable. */
+
+figure.diagram {
+  width: min(calc(100% + 8rem), 100vw - 4rem);
+  margin: 2rem 0 2.25rem;
+}
+
+figure.diagram svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.d-box {
+  fill: var(--panel);
+  stroke: var(--rule-strong);
+  stroke-width: 1;
+}
+
+.d-box-soft {
+  fill: var(--paper);
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+
+/* The one hue in the drawing, reserved for the path being explained. */
+.d-box-key {
+  fill: var(--accent-wash);
+  stroke: var(--accent);
+  stroke-width: 1.25;
+}
+
+.d-line {
+  stroke: var(--ink-3);
+  stroke-width: 1.25;
+  fill: none;
+}
+
+.d-line-key {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  fill: none;
+}
+
+.d-rule {
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+
+.d-dash {
+  stroke: var(--ink-3);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  fill: none;
+}
+
+.d-title {
+  font-family: var(--body);
+  font-size: 12.5px;
+  font-weight: 600;
+  fill: var(--ink);
+}
+
+.d-text {
+  font-family: var(--body);
+  font-size: 11.5px;
+  fill: var(--ink-2);
+}
+
+.d-mono {
+  font-family: var(--mono);
+  font-size: 11px;
+  fill: var(--ink);
+}
+
+.d-mono-dim {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  fill: var(--ink-3);
+}
+
+.d-edge {
+  font-family: var(--mono);
+  font-size: 10px;
+  fill: var(--ink-3);
+}
+
+.d-key-text {
+  font-family: var(--body);
+  font-size: 11.5px;
+  font-weight: 600;
+  fill: var(--accent);
+}
+
+.d-arrow {
+  fill: var(--ink-3);
+}
+
+.d-arrow-key {
+  fill: var(--accent);
+}
+
 /* --- Callouts, using the product's own severity vocabulary ---------------- */
 
 .note {

@@ -156,6 +156,64 @@ export interface ConnectionStatus {
   error?: string
 }
 
+// ---------------------------------------------------------------------------
+// Help / capability audit
+// ---------------------------------------------------------------------------
+
+/** One metric name the app knows how to look for, and whether it exists here. */
+export interface CapabilityEntry {
+  signalId: string
+  signalTitle: string
+  metric: string
+  kind: 'counter' | 'gauge' | 'histogram' | 'summary'
+  scope: 'target' | 'dependency' | 'infra'
+  present: boolean
+  /** HELP text as reported by the scrape target, when Prometheus has it. */
+  help?: string
+  /** Canonical label role → the label name this convention uses for it. */
+  labels: { role: string; name: string }[]
+  remedy: string
+  /** Investigations that declare this signal. */
+  usedBy: string[]
+  /** Panels that cannot run without it. */
+  unlocks: string[]
+}
+
+export interface SourceGroup {
+  /** The instrumentation convention, e.g. Micrometer, cAdvisor, redis_exporter. */
+  flavor: string
+  /** Where these metrics are scraped from. */
+  origin: 'application' | 'exporter' | 'platform'
+  metricsKnown: number
+  metricsPresent: number
+  entries: CapabilityEntry[]
+}
+
+export interface CapabilityReport {
+  /** Total metric names in the connected Prometheus. */
+  metricCount: number
+  /** Abstract signals in the registry. */
+  signalCount: number
+  /** Concrete metric names across every convention. */
+  candidateCount: number
+  sources: SourceGroup[]
+  investigations: {
+    id: string
+    title: string
+    question: string
+    summary: string
+    dependencyLabel?: string
+    panels: {
+      id: string
+      title: string
+      question: string
+      viz: string
+      unit: Unit
+      requires: string[]
+    }[]
+  }[]
+}
+
 /** Named time windows offered in the UI. `seconds` drives start/end/step. */
 export const TIME_RANGES = [
   { id: '30m', label: 'Last 30 min', seconds: 1800 },
