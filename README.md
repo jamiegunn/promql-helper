@@ -1,5 +1,7 @@
 # PromQL Helper
 
+**[Documentation →](https://jamiegunn.github.io/promql-helper/)**
+
 A diagnostic wizard for Prometheus. You pick a **question about your system** —
 "is this service serving happy users?", "is this app pummelling the database?" —
 and it works out which metrics in *your* Prometheus can answer it, runs the
