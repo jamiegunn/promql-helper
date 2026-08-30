@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Walkthrough — PromQL Helper</title>
+    <meta
+      name="description"
+      content="A step-by-step walkthrough of PromQL Helper: pick a service, choose a question, and read the answer."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/docs.css" />
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+
+    <div class="layout">
+      <aside class="rail">
+        <a class="mark" href="index.html">
+          <span class="mark-name">PromQL Helper</span>
+          <span class="mark-sub">Documentation</span>
+        </a>
+        <nav class="rail-nav" aria-label="Documentation">
+          <div class="rail-group">
+            <p class="rail-label">Guide</p>
+            <ul class="rail-list">
+              <li><a href="index.html">Overview</a></li>
+              <li><a href="guide.html" aria-current="page">Walkthrough</a></li>
+              <li><a href="investigations.html">Investigations</a></li>
+              <li><a href="reference.html">Reference</a></li>
+            </ul>
+          </div>
+          <div class="rail-group">
+            <p class="rail-label">On this page</p>
+            <ul class="rail-list">
+              <li><a href="#step-1">1 · Pick a service</a></li>
+              <li><a href="#step-2">2 · Choose a question</a></li>
+              <li><a href="#step-3">3 · Read the answer</a></li>
+              <li><a href="#panels">Working a panel</a></li>
+              <li><a href="#evidence">Checking the evidence</a></li>
+              <li><a href="#unavailable">When a question is greyed out</a></li>
+              <li><a href="#worked">A worked example</a></li>
+            </ul>
+          </div>
+        </nav>
+      </aside>
+
+      <main id="content">
+        <p class="eyebrow">Walkthrough</p>
+        <h1>Using it, start to finish</h1>
+        <p class="lede">
+          Every screenshot here comes from the bundled demo stack, which pretends to be a Spring
+          Boot service called <code>checkout-api</code> with some real problems in it. Run
+          <code>npm run demo</code> and you can follow along on the same data.
+        </p>
+
+        <h2 id="step-1">1 · Pick a service</h2>
+
+        <p>
+          The first screen lists every job Prometheus is scraping, busiest first. The series count
+          is a useful proxy for how well instrumented something is — a job with 12 series will not
+          answer much; one with several hundred usually will.
+        </p>
+
+        <figure class="reveal">
+          <picture>
+            <source
+              media="(prefers-color-scheme: dark)"
+              srcset="assets/shots/step1-targets-dark.png"
+            />
+            <img
+              src="assets/shots/step1-targets-light.png"
+              alt="A list of Prometheus scrape jobs — checkout-api, redis, cadvisor, postgres, kube-state-metrics — each with a series count."
+              width="1132"
+              height="243"
+              loading="lazy"
+            />
+          </picture>
+          <figcaption>
+            Pick the job running the code you care about. Use the filter box above the list if you
+            have hundreds of them.
+          </figcaption>
+        </figure>
+
+        <p>
+          Once you pick a job, any labels worth narrowing by appear underneath — typically
+          namespace, pod and container.
+        </p>
+
+        <figure class="reveal">
+          <picture>
+            <source
+              media="(prefers-color-scheme: dark)"
+              srcset="assets/shots/step1-filters-dark.png"
+            />
+            <img
+              src="assets/shots/step1-filters-light.png"
+              alt="Three dropdown filters labelled namespace, pod and container, each defaulting to All."
+              width="1132"
+              height="62"
+              loading="lazy"
+            />
+          </picture>
+          <figcaption>
+            These are optional. Leaving them on <strong>All</strong> looks at the service as a
+            whole; picking a single pod isolates one replica.
+          </figcaption>
+        </figure>
+
+        <div class="note tip">
+          <span class="note-label">When to narrow to one pod</span>
+          <p>
+            If one replica is behaving differently from its peers, the aggregate hides it. Narrow to
+            a single pod when a chart shows one line diverging from the others, or when the CPU
+            panel reports uneven load across replicas.
+          </p>
+        </div>
+
+        <h2 id="step-2">2 · Choose a question</h2>
+
+        <p>
+          This is the step that does the real work. Before drawing anything, the app resolves every
+          signal the five investigations might need against the metrics this job actually exposes,
+          and then offers only what your data can support.
+        </p>
+
+        <figure class="reveal">
+          <picture>
+            <source
+              media="(prefers-color-scheme: dark)"
+              srcset="assets/shots/step2-questions-dark.png"
+            />
+            <img
+              src="assets/shots/step2-questions-light.png"
+              alt="Five cards, each with a plain-language question, a summary, a readiness badge and a Find out button."
+              width="1132"
+              height="639"
+              loading="lazy"
+            />
+          </picture>
+          <figcaption>
+            Ready investigations come first. Each card names the instrumentation conventions it
+            matched — that is the evidence it found the right metrics.
+          </figcaption>
+        </figure>
+
+        <p>Each card carries a badge telling you how complete the answer will be:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Badge</th>
+                <th>Means</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>✓ Ready</strong></td>
+                <td>Every check in this investigation can run.</td>
+              </tr>
+              <tr>
+                <td><strong>10 of 12 checks</strong></td>
+                <td>
+                  Most of it will run. The missing checks are listed at the bottom of the report,
+                  with what to instrument to unlock them.
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Not available</strong></td>
+                <td>
+                  Nothing matched. Expand <strong>What is missing</strong> on the card to see which
+                  metric names it looked for.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          The line of small type under the badge — <code>Micrometer</code>,
+          <code>HikariCP · Spring Data · postgres_exporter</code> — is which instrumentation
+          conventions were recognised. If that says something you do not use, the app has matched
+          the wrong metrics and the answers will be wrong; check
+          <a href="#evidence">the evidence table</a> before trusting a report.
+        </p>
+
+        <h3>Investigations that need a second target</h3>
+
+        <p>
+          Redis and database metrics do not come from your application — they come from
+          <code>redis_exporter</code> or <code>postgres_exporter</code>, scraped under their own
+          job. Those cards get an extra dropdown.
+        </p>
+
+        <figure class="reveal">
+          <picture>
+            <source
+              media="(prefers-color-scheme: dark)"
+              srcset="assets/shots/step2-dependency-dark.png"
+            />
+            <img
+              src="assets/shots/step2-dependency-light.png"
+              alt="The database pressure card with a Database exporter dropdown set to All instances."
+              width="368"
+              height="329"
+              loading="lazy"
+            />
+          </picture>
+          <figcaption>
+            Leave it on <strong>All instances</strong> if you only run one. Pick a specific job when
+            you have several databases and want just the one this service talks to.
+          </figcaption>
+        </figure>
+
+        <h2 id="step-3">3 · Read the answer</h2>
+
+        <p>
+          The report leads with a verdict: the single worst thing it found, in one sentence. It is
+          deliberately not an average — averaging findings would bury exactly the panel that
+          matters.
+        </p>
+
+        <figure class="reveal">
+          <picture>
+            <source
+              media="(prefers-color-scheme: dark)"
+              srcset="assets/shots/report-verdict-dark.png"
+            />
+            <img
+              src="assets/shots/report-verdict-light.png"
+              alt="A verdict banner reading NEEDS ATTENTION — /api/checkout is the slowest endpoint at 4.50s (p99), and 2 other findings."
+              width="1132"
+              height="87"
+              loading="lazy"
+            />
+          </picture>
+          <figcaption>
+            Severity is never carried by colour alone — each level has its own glyph and word, so it
+            survives colour-blindness and greyscale printing.
+          </figcaption>
+        </figure>
+
+        <ul class="severity-key">
+          <li class="sev-ok">
+            <span class="glyph" aria-hidden="true">✓</span><span class="word">Healthy</span
+            ><span>Nothing worth acting on.</span>
+          </li>
+          <li class="sev-warning">
+            <span class="glyph" aria-hidden="true">▲</span><span class="word">Worth a look</span
+            ><span>Outside normal, but not hurting anyone yet.</span>
+          </li>
+          <li class="sev-serious">
+            <span class="glyph" aria-hidden="true">▲</span><span class="word">Needs attention</span
+            ><span>Degrading behaviour you can measure.</span>
+          </li>
+          <li class="sev-critical">
+            <span class="glyph" aria-hidden="true">✕</span><span class="word">Acting up</span
+            ><span>Users are affected right now.</span>
+          </li>
+          <li class="sev-unknown">
+            <span class="glyph" aria-hidden="true">·</span
+            ><span class="word">Not enough data</span
+            ><span>The query ran but there was nothing to measure.</span>
+          </li>
+        </ul>
+
+        <p>
+          Below the verdict is one control row that scopes the whole report. Changing the time range
+          re-runs every panel against the new window.
+        </p>
+
+        <figure class="reveal">
+          <picture>
+            <source
+              media="(prefers-color-scheme: dark)"
+              srcset="assets/shots/report-controls-dark.png"
+            />
+            <img
+              src="assets/shots/report-controls-light.png"
+              alt="A control row with an Other questions button, time range buttons from Last 30 min to Last 7 days, and a Refresh button."
+              width="1132"
+              height="56"
+              loading="lazy"
+            />
+          </picture>
+          <figcaption>
+            Widen the range when you need to tell "idle" apart from "broken", or to see whether a
+            climb is a trend or a blip.
+          </figcaption>
+        </figure>
+
+        <p>
+          Then the headline numbers. Each one states the question it answers, the value, and a
+          one-line reading of it.
+        </p>
+
+        <figure class="reveal">
+          <picture>
+            <source media="(prefers-color-scheme: dark)" srcset="assets/shots/report-stats-dark.png" />
+            <img
+              src="assets/shots/report-stats-light.png"
+              alt="Four stat tiles: request rate, failure rate, 99th percentile latency, and peak versus typical load, each with a plain-language finding beneath."
+              width="1132"
+              height="191"
+              loading="lazy"
+            />
+          </picture>
+          <figcaption>
+            The small print under each number is the interpretation — the thresholds behind it are
+            documented in <a href="investigations.html">Investigations</a>.
+          </figcaption>
+        </figure>
+
+        <h2 id="panels">Working a panel</h2>
+
+        <p>
+          Every panel states the question it answers next to its title, and carries a finding
+          underneath — the numbers, read for you.
+        </p>
+
+        <figure class="reveal">
+          <picture>
+            <source media="(prefers-color-scheme: dark)" srcset="assets/shots/panel-chart-dark.png" />
+            <img
+              src="assets/shots/panel-chart-light.png"
+              alt="A response time percentiles chart with p50, p90 and p99 lines, and a finding reading: the tail is 49 times the median."
+              width="1132"
+              height="417"
+              loading="lazy"
+            />
+          </picture>
+          <figcaption>
+            Three percentiles on one axis, so the gap between p50 and p99 reads directly as tail
+            spread.
+          </figcaption>
+        </figure>
+
+        <p>Hover anywhere on a chart for a crosshair and every series' value at that moment.</p>
+
+        <figure class="reveal">
+          <picture>
+            <source
+              media="(prefers-color-scheme: dark)"
+              srcset="assets/shots/panel-tooltip-dark.png"
+            />
+            <img
+              src="assets/shots/panel-tooltip-light.png"
+              alt="A chart with a vertical crosshair and a tooltip listing each series and its value at that timestamp."
+              width="1094"
+              height="265"
+              loading="lazy"
+            />
+          </picture>
+          <figcaption>Values are sorted largest first, so the top line is the top row.</figcaption>
+        </figure>
+
+        <p>
+          <strong>Table</strong> swaps any chart for its numbers — minimum, average, maximum and
+          latest per series. Useful for reading exact values, and the accessible equivalent of the
+          chart.
+        </p>
+
+        <figure class="reveal">
+          <picture>
+            <source media="(prefers-color-scheme: dark)" srcset="assets/shots/panel-table-dark.png" />
+            <img
+              src="assets/shots/panel-table-light.png"
+              alt="The same percentile panel shown as a table with min, average, max and latest columns."
+              width="1132"
+              height="293"
+              loading="lazy"
+            />
+          </picture>
+        </figure>
+
+        <p>
+          <strong>PromQL</strong> reveals the exact queries behind the panel, with a copy button for
+          each. This is how you take something from here into Grafana or an alerting rule.
+        </p>
+
+        <figure class="reveal">
+          <picture>
+            <source
+              media="(prefers-color-scheme: dark)"
+              srcset="assets/shots/panel-promql-dark.png"
+            />
+            <img
+              src="assets/shots/panel-promql-light.png"
+              alt="Three histogram_quantile queries revealed beneath a panel, each with a Copy button."
+              width="1094"
+              height="151"
+              loading="lazy"
+            />
+          </picture>
+          <figcaption>
+            The queries are generated against whatever metric names your Prometheus actually uses,
+            so they will run as-is.
+          </figcaption>
+        </figure>
+
+        <p>
+          Ranked panels answer "which one" rather than "when". They are sorted worst-first with the
+          value at the end of each bar.
+        </p>
+
+        <figure class="reveal">
+          <picture>
+            <source
+              media="(prefers-color-scheme: dark)"
+              srcset="assets/shots/panel-ranked-dark.png"
+            />
+            <img
+              src="assets/shots/panel-ranked-light.png"
+              alt="A ranked bar list of the slowest endpoints, with /api/checkout at 4.50 seconds far ahead of the rest."
+              width="1132"
+              height="286"
+              loading="lazy"
+            />
+          </picture>
+        </figure>
+
+        <h2 id="evidence">Checking the evidence</h2>
+
+        <p>
+          At the bottom of every report, <strong>Metrics this used</strong> shows exactly which
+          metric in your Prometheus each abstract signal resolved to, and by which convention. This
+          is the first thing to check if a number looks wrong.
+        </p>
+
+        <figure class="reveal">
+          <picture>
+            <source
+              media="(prefers-color-scheme: dark)"
+              srcset="assets/shots/report-provenance-dark.png"
+            />
+            <img
+              src="assets/shots/report-provenance-light.png"
+              alt="A table mapping each signal to the metric name it resolved to, the instrumentation convention, and a series count."
+              width="1132"
+              height="191"
+              loading="lazy"
+            />
+          </picture>
+          <figcaption>
+            If a signal resolved to a metric you did not expect, the report is measuring the wrong
+            thing — see
+            <a href="reference.html#extending">Reference → Teaching it your metric names</a>.
+          </figcaption>
+        </figure>
+
+        <h2 id="unavailable">When a question is greyed out</h2>
+
+        <p>
+          An unavailable investigation almost never means the data does not exist. It means the app
+          did not recognise the names. Expand <strong>What is missing</strong> and you get, for each
+          signal it could not find, the metric names it looked for and what would produce them.
+        </p>
+
+        <p>Three things to check, in order:</p>
+
+        <ol>
+          <li>
+            <strong>Is it the right job?</strong> Application metrics and container metrics live
+            under different jobs. Pick the job scraping your app's own
+            <code>/metrics</code> endpoint.
+          </li>
+          <li>
+            <strong>Does your instrumentation use different names?</strong> Compare the names it
+            looked for against what you actually expose. If yours differ, add them to the signal
+            registry — one entry, no code change beyond the list.
+          </li>
+          <li>
+            <strong>Is the metric genuinely absent?</strong> The remedy line on each gap says what
+            produces it. Histogram buckets in particular are often switched off by default, which is
+            why latency percentiles are the most common thing missing.
+          </li>
+        </ol>
+
+        <div class="note limit">
+          <span class="note-label">Known limitation</span>
+          <p>
+            The app only recognises the metric names in its signal registry. An unusual naming
+            convention shows as unavailable even though the data is right there. Adding a candidate
+            fixes it permanently — see
+            <a href="reference.html#extending">Teaching it your metric names</a>.
+          </p>
+        </div>
+
+        <h2 id="worked">A worked example</h2>
+
+        <p>
+          Here is how the demo service's problem actually unfolds, and it is a good model for using
+          the tool on something real.
+        </p>
+
+        <p>
+          Start with <strong>Is this service serving happy users?</strong> The verdict says
+          <code>/api/checkout</code> is the slowest endpoint at 4.50s at p99, and the percentile
+          panel reports the tail is 49× the median. So most requests are fine and one specific path
+          is not. That rules out anything global — it is not the host, and it is not every request
+          getting slower.
+        </p>
+
+        <p>
+          A wide tail on one endpoint points at something that endpoint alone touches. Go back and
+          ask <strong>Is this app pummelling the database?</strong> The verdict there is that up to
+          14 threads were queued waiting for a connection, with 16 requests giving up entirely. The
+          pool utilisation panel shows it hitting 100%.
+        </p>
+
+        <p>
+          Now check whether the database is the problem or the pool is. The server-side panels say
+          the database peaked at 74% of its connection limit with a 98% buffer cache hit ratio — it
+          is comfortable. So the database is fine and the pool in front of it is too small. That is
+          a config change, not a query optimisation.
+        </p>
+
+        <div class="note watch">
+          <span class="note-label">Do this part yourself</span>
+          <p>
+            Each investigation is scoped to its own domain — the service health report does not know
+            the connection pool is saturated. Connecting those two findings is still your job. It is
+            the main thing on the list to improve.
+          </p>
+        </div>
+
+        <nav class="pager">
+          <a href="index.html">
+            <span class="dir">Previous</span>
+            <span class="to">← Overview</span>
+          </a>
+          <a href="investigations.html">
+            <span class="dir">Next</span>
+            <span class="to">Investigations →</span>
+          </a>
+        </nav>
+      </main>
+    </div>
+
+    <script src="assets/docs.js" defer></script>
+  </body>
+</html>

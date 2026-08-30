@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PromQL Helper — diagnose a service from its metrics</title>
+    <meta
+      name="description"
+      content="A diagnostic wizard for Prometheus. Pick a question about your service, and it works out which metrics can answer it, runs the queries, and tells you what it found."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/docs.css" />
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+
+    <div class="layout">
+      <aside class="rail">
+        <a class="mark" href="index.html">
+          <span class="mark-name">PromQL Helper</span>
+          <span class="mark-sub">Documentation</span>
+        </a>
+        <nav class="rail-nav" aria-label="Documentation">
+          <div class="rail-group">
+            <p class="rail-label">Guide</p>
+            <ul class="rail-list">
+              <li><a href="index.html" aria-current="page">Overview</a></li>
+              <li><a href="guide.html">Walkthrough</a></li>
+              <li><a href="investigations.html">Investigations</a></li>
+              <li><a href="reference.html">Reference</a></li>
+            </ul>
+          </div>
+          <div class="rail-group">
+            <p class="rail-label">On this page</p>
+            <ul class="rail-list">
+              <li><a href="#what">What it does</a></li>
+              <li><a href="#connect">Connect it</a></li>
+              <li><a href="#shape">The three steps</a></li>
+              <li><a href="#demo">Try it with no Prometheus</a></li>
+            </ul>
+          </div>
+        </nav>
+      </aside>
+
+      <main id="content">
+        <div class="hero">
+          <p class="eyebrow">Documentation</p>
+          <h1>Ask a question. Get an answer.</h1>
+          <p class="lede">
+            PromQL Helper is a diagnostic wizard for Prometheus. You pick a question about your
+            service — the kind you would actually ask out loud — and it works out which of your
+            metrics can answer it, runs the queries, and tells you what it found.
+          </p>
+        </div>
+
+        <p class="specimen-caption">One investigation, end to end</p>
+        <div class="specimen reveal">
+          <p class="specimen-q">Is this service serving happy users?</p>
+          <p class="specimen-meta">checkout-api · matched via Micrometer</p>
+          <ul class="specimen-rail">
+            <li>
+              <span class="from">http.requests.count</span>
+              <span class="arrow" aria-hidden="true">→</span>
+              <span class="to">http_server_requests_seconds_count</span>
+            </li>
+            <li>
+              <span class="from">http.latency.histogram</span>
+              <span class="arrow" aria-hidden="true">→</span>
+              <span class="to">http_server_requests_seconds_bucket</span>
+            </li>
+            <li>
+              <span class="from">http.latency.sum</span>
+              <span class="arrow" aria-hidden="true">→</span>
+              <span class="to">http_server_requests_seconds_sum</span>
+            </li>
+          </ul>
+          <div class="specimen-verdict">
+            <span class="glyph" aria-hidden="true">▲</span>
+            <span>
+              <span class="sev">Needs attention</span>
+              <span class="said"
+                >/api/checkout is the slowest endpoint at 4.50s (p99), and 2 other findings.</span
+              >
+            </span>
+          </div>
+        </div>
+
+        <p>
+          The three lines in the middle are the part that makes this work: what the investigation
+          asks for on the left, and what your Prometheus actually calls it on the right.
+        </p>
+
+        <p>
+          You never write any PromQL. It is there if you want it — every panel has a
+          <strong>PromQL</strong> button that shows the exact query and copies it — but the queries
+          are generated for you, and the results are read for you.
+        </p>
+
+        <h2 id="what">What it does</h2>
+
+        <p>
+          Most monitoring tools show you metrics and leave the diagnosis to you. This one starts
+          from the diagnosis. The five investigations are written the way an on-call engineer
+          actually thinks:
+        </p>
+
+        <ul class="questions">
+          <li>
+            <span class="q">Is this service serving happy users?</span>
+            <span class="a"
+              >Traffic, failure rate and latency percentiles, broken down by endpoint.</span
+            >
+          </li>
+          <li>
+            <span class="q">How much CPU and memory does it use, and how spiky is it?</span>
+            <span class="a"
+              >Usage over time with a percentile breakdown, checked against the limits on the pod —
+              including whether those limits are throttling it.</span
+            >
+          </li>
+          <li>
+            <span class="q">Is the Java runtime itself healthy?</span>
+            <span class="a"
+              >Heap pressure, garbage-collection overhead, and whether threads are blocked rather
+              than working.</span
+            >
+          </li>
+          <li>
+            <span class="q">Is this app pummelling the database?</span>
+            <span class="a"
+              >Connection-pool saturation from the application side, checked against what the
+              database server reports.</span
+            >
+          </li>
+          <li>
+            <span class="q">Is this app hammering Redis?</span>
+            <span class="a"
+              >Command throughput, cache hit ratio, evictions, and whether something is blocking the
+              single Redis thread.</span
+            >
+          </li>
+        </ul>
+
+        <p>
+          A question only appears if your metrics can answer it. Where they cannot, the card says
+          what to instrument instead of failing silently.
+        </p>
+
+        <h2 id="connect">Connect it</h2>
+
+        <p>Two variables. That is the whole configuration.</p>
+
+        <pre><code><span class="c"># .env</span>
+PROMETHEUS_URL=https://prometheus.internal.example.com
+PROMETHEUS_TOKEN=&lt;bearer token&gt;</code></pre>
+
+        <pre><code>npm install
+npm run dev</code></pre>
+
+        <p>
+          The UI comes up on <code>http://localhost:5173</code>. For a single production process
+          serving both the API and the UI, run <code>npm run build &amp;&amp; npm start</code> and
+          open <code>http://localhost:8787</code>.
+        </p>
+
+        <div class="note tip">
+          <span class="note-label">Your token stays put</span>
+          <p>
+            All Prometheus traffic goes through the Node process. The browser only ever talks to
+            this app's own <code>/api</code>, so the bearer token is never sent to the client and
+            never appears in a network tab.
+          </p>
+        </div>
+
+        <p>
+          <code>PROMETHEUS_URL</code> is the API root — no trailing <code>/api/v1</code>. Leave
+          <code>PROMETHEUS_TOKEN</code> unset for an unauthenticated Prometheus. Everything else is
+          optional and documented in
+          <a href="reference.html#configuration">Reference → Configuration</a>.
+        </p>
+
+        <h2 id="shape">The three steps</h2>
+
+        <p>
+          The wizard is a real sequence — each step narrows what the next one has to consider.
+        </p>
+
+        <ol class="steps">
+          <li>
+            <b>Pick a service</b>
+            Choose one of the jobs Prometheus is scraping. Optionally narrow to a namespace or a
+            single pod.
+          </li>
+          <li>
+            <b>Choose a question</b>
+            The app matches your metrics against what each investigation needs, and offers only the
+            questions your data can answer.
+          </li>
+          <li>
+            <b>Read the answer</b>
+            It runs the queries, interprets the numbers, and leads with a verdict — the worst thing
+            it found, in one sentence.
+          </li>
+        </ol>
+
+        <p>
+          <a href="guide.html">The walkthrough</a> goes through all three with screenshots.
+        </p>
+
+        <h2 id="demo">Try it with no Prometheus</h2>
+
+        <p>
+          The repository ships synthetic exporters and a scrape config, so you can see the whole
+          thing work before pointing it at anything real:
+        </p>
+
+        <pre><code>npm run demo</code></pre>
+
+        <p>
+          That starts the fixture exporters, a real Prometheus in Docker, the API and the UI. Set
+          <code>PROMETHEUS_URL=http://localhost:9090</code> and give it a minute or two to build up
+          some history.
+        </p>
+
+        <p>
+          The fixture pretends to be a Spring Boot service called <code>checkout-api</code> running
+          two pods, alongside Redis, Postgres, cAdvisor and kube-state-metrics. It has real problems
+          baked in — a slow checkout endpoint, a connection pool that runs out, a Redis instance
+          evicting keys — so there is something to actually find. Every screenshot in these docs
+          comes from it.
+        </p>
+
+        <nav class="pager">
+          <a href="guide.html">
+            <span class="dir">Next</span>
+            <span class="to">Walkthrough →</span>
+          </a>
+        </nav>
+      </main>
+    </div>
+
+    <script src="assets/docs.js" defer></script>
+  </body>
+</html>

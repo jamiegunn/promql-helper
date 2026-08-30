@@ -1,0 +1,51 @@
+# Prometheus config for local development against the fixture exporters.
+#
+#   npm run fixture        # start the exporters on :9101
+#   npm run prometheus     # start Prometheus in Docker on :9090
+#
+# Scrape interval is deliberately short so a useful range builds up in a couple
+# of minutes rather than an hour.
+
+global:
+  scrape_interval: 5s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # The application: one job, two pods — labelled the way Kubernetes service
+  # discovery would label them. Those namespace/pod labels are what let the app
+  # tie these series back to the cAdvisor container metrics, which scrape under
+  # a completely different job.
+  - job_name: checkout-api
+    static_configs:
+      - targets: ['host.docker.internal:9101']
+        labels:
+          __metrics_path__: /metrics/app/1
+          namespace: shop
+          pod: checkout-api-7d4f9b6c8-hk2mn
+          container: checkout-api
+      - targets: ['host.docker.internal:9101']
+        labels:
+          __metrics_path__: /metrics/app/2
+          namespace: shop
+          pod: checkout-api-7d4f9b6c8-x9wqp
+          container: checkout-api
+
+  - job_name: redis
+    metrics_path: /metrics/redis
+    static_configs:
+      - targets: ['host.docker.internal:9101']
+
+  - job_name: postgres
+    metrics_path: /metrics/postgres
+    static_configs:
+      - targets: ['host.docker.internal:9101']
+
+  - job_name: cadvisor
+    metrics_path: /metrics/cadvisor
+    static_configs:
+      - targets: ['host.docker.internal:9101']
+
+  - job_name: kube-state-metrics
+    metrics_path: /metrics/kube-state
+    static_configs:
+      - targets: ['host.docker.internal:9101']

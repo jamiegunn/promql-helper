@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reference — PromQL Helper</title>
+    <meta
+      name="description"
+      content="Configuration, how signal resolution works, teaching PromQL Helper your own metric names, troubleshooting, and known limitations."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/docs.css" />
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+
+    <div class="layout">
+      <aside class="rail">
+        <a class="mark" href="index.html">
+          <span class="mark-name">PromQL Helper</span>
+          <span class="mark-sub">Documentation</span>
+        </a>
+        <nav class="rail-nav" aria-label="Documentation">
+          <div class="rail-group">
+            <p class="rail-label">Guide</p>
+            <ul class="rail-list">
+              <li><a href="index.html">Overview</a></li>
+              <li><a href="guide.html">Walkthrough</a></li>
+              <li><a href="investigations.html">Investigations</a></li>
+              <li><a href="reference.html" aria-current="page">Reference</a></li>
+            </ul>
+          </div>
+          <div class="rail-group">
+            <p class="rail-label">On this page</p>
+            <ul class="rail-list">
+              <li><a href="#configuration">Configuration</a></li>
+              <li><a href="#resolution">How resolution works</a></li>
+              <li><a href="#scopes">The three scopes</a></li>
+              <li><a href="#extending">Teaching it your names</a></li>
+              <li><a href="#troubleshooting">Troubleshooting</a></li>
+              <li><a href="#limits">Known limitations</a></li>
+              <li><a href="#scripts">Scripts</a></li>
+            </ul>
+          </div>
+        </nav>
+      </aside>
+
+      <main id="content">
+        <p class="eyebrow">Reference</p>
+        <h1>Configuration and internals</h1>
+        <p class="lede">
+          Everything you need to point it at a real Prometheus, teach it your own metric names, and
+          know where it will let you down.
+        </p>
+
+        <h2 id="configuration">Configuration</h2>
+
+        <p>
+          Read from <code>.env</code> in the project root, or from the environment directly. A real
+          environment variable always wins over the file.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Variable</th>
+                <th>Default</th>
+                <th>What it does</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>PROMETHEUS_URL</code></td>
+                <td>—</td>
+                <td>
+                  Required. Base URL of the Prometheus HTTP API, with no trailing
+                  <code>/api/v1</code>. The process exits with an explanation if unset.
+                </td>
+              </tr>
+              <tr>
+                <td><code>PROMETHEUS_TOKEN</code></td>
+                <td>empty</td>
+                <td>
+                  Sent as <code>Authorization: Bearer …</code>. Leave unset for an unauthenticated
+                  Prometheus.
+                </td>
+              </tr>
+              <tr>
+                <td><code>PORT</code></td>
+                <td><code>8787</code></td>
+                <td>Port the API listens on.</td>
+              </tr>
+              <tr>
+                <td><code>PROMETHEUS_TIMEOUT_MS</code></td>
+                <td><code>30000</code></td>
+                <td>
+                  Raise it if long range queries against a busy server are timing out.
+                </td>
+              </tr>
+              <tr>
+                <td><code>PROMETHEUS_HEADERS</code></td>
+                <td>empty</td>
+                <td>
+                  Extra headers as JSON, for proxies that need them — for example
+                  <code>{"X-Scope-OrgID":"team-payments"}</code>.
+                </td>
+              </tr>
+              <tr>
+                <td><code>PROMETHEUS_INSECURE</code></td>
+                <td><code>0</code></td>
+                <td>
+                  Set to <code>1</code> to skip TLS verification. Disables the check for the whole
+                  process — only for a self-signed certificate on a network you trust.
+                </td>
+              </tr>
+              <tr>
+                <td><code>CATALOG_TTL_SECONDS</code></td>
+                <td><code>300</code></td>
+                <td>
+                  How long the metric catalogue is cached. It changes rarely and is expensive to
+                  fetch.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="note tip">
+          <span class="note-label">The token stays server-side</span>
+          <p>
+            All Prometheus traffic goes through the Node process, and the browser only ever calls
+            this app's own <code>/api</code>. In production a single process serves both the API and
+            the built UI, so there is no cross-origin surface at all.
+          </p>
+        </div>
+
+        <h2 id="resolution">How resolution works</h2>
+
+        <p>
+          The hard problem is that no two services name anything the same way. Spring Boot calls the
+          HTTP path <code>uri</code>; the Prometheus Java client calls it <code>handler</code>;
+          OpenTelemetry calls it <code>http_route</code>. A tool that hardcodes any one of those
+          works for exactly one stack.
+        </p>
+
+        <p>
+          So investigations are written against abstract <strong>signals</strong> —
+          <code>http.requests.count</code>, <code>db.pool.pending</code>, <code>jvm.gc.pause.sum</code>
+          — and a registry maps each signal to candidate metric names per convention, in preference
+          order. The first candidate that exists wins.
+        </p>
+
+        <p>
+          Resolution folds every candidate into a single instant query, so one round trip
+          establishes both which metrics exist for this target and how many series each has:
+        </p>
+
+        <pre><code>count by (__name__) ({__name__=~"a|b|c", job="checkout-api"})</code></pre>
+
+        <p>
+          Candidates are checked against the cached catalogue first, so the regex only ever contains
+          names that exist somewhere. Signals that share a <code>family</code> are forced to resolve
+          to the same convention — otherwise a count from Micrometer and a histogram from
+          OpenTelemetry would disagree about what the label for "route" is called.
+        </p>
+
+        <h2 id="scopes">The three scopes</h2>
+
+        <p>Not everything lives under the job you picked.</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Scope</th>
+                <th>Scoped by</th>
+                <th>Examples</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>target</code></td>
+                <td>The job you chose</td>
+                <td>HTTP metrics, JVM metrics, connection pools — your app's own endpoint</td>
+              </tr>
+              <tr>
+                <td><code>dependency</code></td>
+                <td>A job you choose on the card</td>
+                <td><code>redis_exporter</code>, <code>postgres_exporter</code></td>
+              </tr>
+              <tr>
+                <td><code>infra</code></td>
+                <td>Derived namespace and pod</td>
+                <td>cAdvisor, kube-state-metrics</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          The <code>infra</code> scope is the interesting one. Container metrics scrape under
+          cAdvisor's own job, so <code>job="your-app"</code> will never match them — they are keyed
+          by <code>namespace</code> and <code>pod</code>. The app asks Prometheus which namespace and
+          pods your application's <em>own</em> series carry, and builds a selector from that.
+        </p>
+
+        <p>
+          If your metrics carry no such labels, these signals are reported as gaps with an
+          explanation. That is deliberate: matching without them would silently pull in every
+          container in the cluster and produce numbers that look plausible and are wrong.
+        </p>
+
+        <h2 id="extending">Teaching it your metric names</h2>
+
+        <p>
+          If an investigation shows as unavailable but you know the data exists, add a candidate to
+          the relevant signal in <code>src/server/signals.ts</code>:</p>
+
+        <pre><code>{
+  <span class="k">id</span>: <span class="c">'http.requests.count'</span>,
+  <span class="k">candidates</span>: [
+    <span class="c">// …existing entries…</span>
+    {
+      <span class="k">flavor</span>: <span class="c">'My framework'</span>,
+      <span class="k">metric</span>: <span class="c">'myapp_http_requests_total'</span>,
+      <span class="k">labels</span>: { route: <span class="c">'endpoint'</span>, status: <span class="c">'status_code'</span>, method: <span class="c">'verb'</span> },
+      <span class="k">errorPattern</span>: <span class="c">'5..'</span>,
+    },
+  ],
+}</code></pre>
+
+        <p>Three things to get right:</p>
+
+        <ul>
+          <li>
+            <strong>Order is preference.</strong> Put your entry where you want it considered — the
+            first candidate present in your Prometheus wins.
+          </li>
+          <li>
+            <strong>Map the label roles.</strong> Panels ask for roles like <code>route</code> and
+            <code>status</code>, never for literal label names. A role you leave out simply disables
+            the panels that need it, rather than breaking anything.
+          </li>
+          <li>
+            <strong>Match the family.</strong> If you add a candidate for
+            <code>http.requests.count</code>, add the matching one for
+            <code>http.latency.histogram</code> under the same <code>flavor</code> string, or the
+            family rule will fall back to a different convention.
+          </li>
+        </ul>
+
+        <p>
+          Add <code>scale</code> if your metric is in different units — the legacy OpenTelemetry
+          candidate uses <code>scale: 0.001</code> to convert milliseconds to seconds — and
+          <code>matchers</code> for any filter the metric always needs.
+        </p>
+
+        <h2 id="troubleshooting">Troubleshooting</h2>
+
+        <h3>"Prometheus returned a non-JSON response"</h3>
+        <p>
+          <code>PROMETHEUS_URL</code> is pointing at a UI path rather than the API root. It should
+          be the bare origin, with no <code>/graph</code> and no <code>/api/v1</code>.
+        </p>
+
+        <h3>"Prometheus rejected the bearer token"</h3>
+        <p>
+          The token is wrong or expired. If your Prometheus sits behind a proxy that wants a
+          different header entirely, use <code>PROMETHEUS_HEADERS</code> instead.
+        </p>
+
+        <h3>The first page load is slow</h3>
+        <p>
+          Target discovery runs <code>count by (job) ({__name__=~".+"})</code>, which touches every
+          series in the TSDB. On a very large Prometheus that is genuinely expensive. It is not
+          cached between restarts.
+        </p>
+
+        <h3>Every investigation says "not available"</h3>
+        <p>
+          Usually the wrong job. Application metrics and container metrics live under separate jobs
+          — pick the one scraping your app's own <code>/metrics</code> endpoint, not
+          <code>cadvisor</code> or <code>kubernetes-nodes</code>.
+        </p>
+
+        <h3>The numbers look wrong</h3>
+        <p>
+          Open <strong>Metrics this used</strong> at the bottom of the report and check what each
+          signal resolved to. A signal matching a metric you did not expect means the report is
+          measuring the wrong thing.
+        </p>
+
+        <h3>Latency percentiles are missing</h3>
+        <p>
+          Histogram buckets are off. In Spring Boot:
+          <code>management.metrics.distribution.percentiles-histogram.http.server.requests=true</code>.
+          Without buckets, percentiles cannot be computed at all — a <code>_count</code> and
+          <code>_sum</code> only give you an average.
+        </p>
+
+        <h2 id="limits">Known limitations</h2>
+
+        <p>Worth knowing before you rely on it.</p>
+
+        <div class="note limit">
+          <span class="note-label">Coverage</span>
+          <p>
+            The signal registry is a curated allowlist. It recognises the conventions that were
+            written into it and nothing else, so an unusual naming scheme reads as "not available"
+            even though the data is there. Adding a candidate fixes it permanently, but it does not
+            discover conventions on its own.
+          </p>
+        </div>
+
+        <div class="note limit">
+          <span class="note-label">Calibration</span>
+          <p>
+            Thresholds are universal; systems are not. "p99 above one second" is meaningless for a
+            batch job. The findings are opinionated defaults, not calibrated to your SLOs, and they
+            are not configurable yet.
+          </p>
+        </div>
+
+        <div class="note limit">
+          <span class="note-label">No synthesis across domains</span>
+          <p>
+            Each investigation is scoped to its own domain. Service health does not know the
+            connection pool is saturated. Connecting findings across investigations is still the
+            reader's job.
+          </p>
+        </div>
+
+        <div class="note limit">
+          <span class="note-label">Level, not change</span>
+          <p>
+            Everything is "over the last N". There are no deploy markers and no week-over-week
+            comparison, so a service that broke a month ago looks the same as one that broke ten
+            minutes ago — even though diagnosis is usually about what changed.
+          </p>
+        </div>
+
+        <h2 id="scripts">Scripts</h2>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Command</th>
+                <th>Does</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>npm run dev</code></td>
+                <td>API with watch on :8787, Vite dev server on :5173</td>
+              </tr>
+              <tr>
+                <td><code>npm run demo</code></td>
+                <td>Fixture exporters, Prometheus in Docker, API and UI together</td>
+              </tr>
+              <tr>
+                <td><code>npm run build</code> then <code>npm start</code></td>
+                <td>Production build, single process serving both on :8787</td>
+              </tr>
+              <tr>
+                <td><code>npm run typecheck</code></td>
+                <td><code>tsc --noEmit</code></td>
+              </tr>
+              <tr>
+                <td><code>npm run fixture</code></td>
+                <td>Synthetic exporters only, on :9101</td>
+              </tr>
+              <tr>
+                <td><code>npm run prometheus</code></td>
+                <td>Prometheus in Docker against the fixture scrape config</td>
+              </tr>
+              <tr>
+                <td><code>node scripts/capture-docs-shots.mjs</code></td>
+                <td>Regenerate the screenshots in these docs from the running app</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <nav class="pager">
+          <a href="investigations.html">
+            <span class="dir">Previous</span>
+            <span class="to">← Investigations</span>
+          </a>
+          <a href="index.html">
+            <span class="dir">Back to</span>
+            <span class="to">Overview →</span>
+          </a>
+        </nav>
+      </main>
+    </div>
+
+    <script src="assets/docs.js" defer></script>
+  </body>
+</html>

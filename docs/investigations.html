@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Investigations — PromQL Helper</title>
+    <meta
+      name="description"
+      content="The five investigations in PromQL Helper: what each one needs, what it checks, and the thresholds behind every finding."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/docs.css" />
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+
+    <div class="layout">
+      <aside class="rail">
+        <a class="mark" href="index.html">
+          <span class="mark-name">PromQL Helper</span>
+          <span class="mark-sub">Documentation</span>
+        </a>
+        <nav class="rail-nav" aria-label="Documentation">
+          <div class="rail-group">
+            <p class="rail-label">Guide</p>
+            <ul class="rail-list">
+              <li><a href="index.html">Overview</a></li>
+              <li><a href="guide.html">Walkthrough</a></li>
+              <li><a href="investigations.html" aria-current="page">Investigations</a></li>
+              <li><a href="reference.html">Reference</a></li>
+            </ul>
+          </div>
+          <div class="rail-group">
+            <p class="rail-label">On this page</p>
+            <ul class="rail-list">
+              <li><a href="#findings">How a finding is made</a></li>
+              <li><a href="#service-health">Service health</a></li>
+              <li><a href="#resources">CPU &amp; memory</a></li>
+              <li><a href="#jvm">JVM health</a></li>
+              <li><a href="#database">Database pressure</a></li>
+              <li><a href="#redis">Redis pressure</a></li>
+            </ul>
+          </div>
+        </nav>
+      </aside>
+
+      <main id="content">
+        <p class="eyebrow">Investigations</p>
+        <h1>What each question checks</h1>
+        <p class="lede">
+          Every panel carries a rule that turns its numbers into a sentence. Those rules are listed
+          here in full, because a threshold you cannot see is a threshold you cannot argue with.
+        </p>
+
+        <h2 id="findings">How a finding is made</h2>
+
+        <p>
+          Each panel runs its queries, then evaluates the result against a threshold and produces a
+          severity plus one sentence. The report's verdict is the <strong>worst</strong> finding
+          across all panels, not a summary or an average — averaging would hide the one panel you
+          need to see.
+        </p>
+
+        <p>
+          A panel is skipped entirely if the metrics it needs are absent, and appears in the gap
+          list at the bottom of the report instead. That is why two services can produce reports of
+          very different lengths.
+        </p>
+
+        <div class="note watch">
+          <span class="note-label">These are defaults, not your SLOs</span>
+          <p>
+            The thresholds below are reasonable for a user-facing web service. They are wrong for a
+            batch job, a video encoder, or a report generator where a 30-second p99 is entirely
+            normal. Read a finding as "here is something unusual, by general standards" rather than
+            as a judgement about your system. They are not yet configurable.
+          </p>
+        </div>
+
+        <h2 id="service-health">Is this service serving happy users?</h2>
+
+        <p>
+          The RED method — rate, errors, duration. Between them these describe the experience your
+          users are actually having, rather than how the machine feels.
+        </p>
+
+        <h3>What it needs</h3>
+        <p>
+          An HTTP server request counter, and ideally a latency histogram. Recognised from
+          Micrometer, OpenTelemetry (current and legacy conventions), and the Prometheus client
+          libraries. Without histogram buckets you still get traffic and error rates, but no
+          percentiles — that is the single most common gap.
+        </p>
+
+        <h3>What it checks</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Check</th>
+                <th>Finding at</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Failure rate</td>
+                <td>
+                  <strong>Acting up</strong> at ≥&nbsp;5% of requests returning 5xx ·
+                  <strong>Worth a look</strong> at ≥&nbsp;1%
+                </td>
+              </tr>
+              <tr>
+                <td>99th percentile latency</td>
+                <td>
+                  <strong>Acting up</strong> at ≥&nbsp;3s · <strong>Worth a look</strong> at
+                  ≥&nbsp;1s
+                </td>
+              </tr>
+              <tr>
+                <td>Tail spread</td>
+                <td><strong>Worth a look</strong> when p99 is ≥&nbsp;20× p50</td>
+              </tr>
+              <tr>
+                <td>Failures by endpoint</td>
+                <td>
+                  <strong>Acting up</strong> when one endpoint exceeds 5% failures for more than a
+                  tenth of the window; <strong>Worth a look</strong> for a shorter spike
+                </td>
+              </tr>
+              <tr>
+                <td>Slowest endpoint</td>
+                <td>
+                  <strong>Needs attention</strong> at ≥&nbsp;3s p99 · <strong>Worth a look</strong>
+                  at ≥&nbsp;1s
+                </td>
+              </tr>
+              <tr>
+                <td>Peak vs typical load</td>
+                <td><strong>Worth a look</strong> when peak traffic is ≥&nbsp;5× the average</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          <strong>Reading the tail spread.</strong> A p99 twenty times the median means most
+          requests are fine and a specific subset is not. Look for one slow endpoint, one slow
+          replica, or lock contention — not for a general slowdown.
+        </p>
+
+        <h2 id="resources">How much CPU and memory does it use?</h2>
+
+        <p>
+          Sizing and saturation. A service that averages half a core but peaks at three is a very
+          different capacity problem from one sitting flat at one and a half, and an average cannot
+          tell you which you have.
+        </p>
+
+        <h3>What it needs</h3>
+        <p>
+          cAdvisor for container CPU and memory, and kube-state-metrics for the configured limits.
+          These scrape under their own jobs, so the app identifies your pods from the
+          <code>namespace</code> and <code>pod</code> labels on the application's own series. If
+          your metrics carry no such labels, these checks are reported as gaps rather than guessed
+          at. Where cAdvisor is unavailable it falls back to
+          <code>process_cpu_seconds_total</code> and <code>process_resident_memory_bytes</code>,
+          which show usage but not limits.
+        </p>
+
+        <h3>What it checks</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Check</th>
+                <th>Finding at</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>CPU percentiles</td>
+                <td><strong>Worth a look</strong> when peak CPU is ≥&nbsp;4× the median</td>
+              </tr>
+              <tr>
+                <td>CPU against limit</td>
+                <td>
+                  <strong>Acting up</strong> at ≥&nbsp;95% · <strong>Worth a look</strong> at
+                  ≥&nbsp;80% · flagged as oversized below 20%
+                </td>
+              </tr>
+              <tr>
+                <td>CPU throttling</td>
+                <td>
+                  <strong>Acting up</strong> at ≥&nbsp;25% of scheduling periods ·
+                  <strong>Worth a look</strong> at ≥&nbsp;5%
+                </td>
+              </tr>
+              <tr>
+                <td>Memory against limit</td>
+                <td>
+                  <strong>Acting up</strong> at ≥&nbsp;90% · <strong>Worth a look</strong> at
+                  ≥&nbsp;75%
+                </td>
+              </tr>
+              <tr>
+                <td>Memory trend</td>
+                <td>
+                  <strong>Worth a look</strong> when every replica grew ≥&nbsp;25% from the start of
+                  the window to the end
+                </td>
+              </tr>
+              <tr>
+                <td>Uneven replicas</td>
+                <td><strong>Worth a look</strong> when the busiest is ≥&nbsp;3× the average</td>
+              </tr>
+              <tr>
+                <td>Restarts</td>
+                <td>
+                  <strong>Acting up</strong> at ≥&nbsp;3 in the window ·
+                  <strong>Worth a look</strong> at ≥&nbsp;1
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          <strong>Throttling is the one to watch.</strong> It explains latency that the CPU graph
+          alone cannot: a container can sit at 40% average CPU and still be parked by the kernel
+          during every burst. Unlike memory, exceeding a CPU limit is not fatal — it is just slow,
+          silently.
+        </p>
+
+        <h2 id="jvm">Is the Java runtime itself healthy?</h2>
+
+        <p>
+          When a Java service is slow the cause is usually that it is collecting garbage, out of
+          heap, or blocked on locks. All three look identical from outside — the requests are just
+          slow — and completely different from inside the runtime.
+        </p>
+
+        <h3>What it needs</h3>
+        <p>
+          JVM metrics from Micrometer, the Prometheus Java client, or the OpenTelemetry JVM
+          instrumentation. In Spring Boot these come free with
+          <code>spring-boot-starter-actuator</code>.
+        </p>
+
+        <h3>What it checks</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Check</th>
+                <th>Finding at</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Heap in use</td>
+                <td>
+                  <strong>Acting up</strong> at ≥&nbsp;90% of max heap ·
+                  <strong>Worth a look</strong> at ≥&nbsp;75%
+                </td>
+              </tr>
+              <tr>
+                <td>GC overhead</td>
+                <td>
+                  <strong>Acting up</strong> at ≥&nbsp;10% of wall-clock time ·
+                  <strong>Worth a look</strong> at ≥&nbsp;5%
+                </td>
+              </tr>
+              <tr>
+                <td>Heap trend</td>
+                <td>
+                  <strong>Worth a look</strong> when the post-collection low point rises by ≥&nbsp;15
+                  percentage points across the window
+                </td>
+              </tr>
+              <tr>
+                <td>Average GC pause</td>
+                <td>
+                  <strong>Acting up</strong> at ≥&nbsp;1s · <strong>Worth a look</strong> at
+                  ≥&nbsp;200ms
+                </td>
+              </tr>
+              <tr>
+                <td>Collection frequency</td>
+                <td><strong>Worth a look</strong> at ≥&nbsp;2 collections per second</td>
+              </tr>
+              <tr>
+                <td>Blocked threads</td>
+                <td>
+                  <strong>Needs attention</strong> at ≥&nbsp;10 threads BLOCKED ·
+                  <strong>Worth a look</strong> at ≥&nbsp;1
+                </td>
+              </tr>
+              <tr>
+                <td>Thread count</td>
+                <td><strong>Worth a look</strong> when the peak is ≥&nbsp;2× the average</td>
+              </tr>
+              <tr>
+                <td>Metaspace</td>
+                <td><strong>Worth a look</strong> above 512&nbsp;MB</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          <strong>A healthy heap is a sawtooth.</strong> It fills, a collection frees it, it fills
+          again. A leak shows up in the <em>troughs</em> rising, not the peaks — which is why the
+          heap trend check looks at the low points rather than the maximum.
+        </p>
+
+        <h2 id="database">Is this app pummelling the database?</h2>
+
+        <p>
+          Deliberately looks from both ends. The connection pool tells you whether your threads are
+          waiting; the database server tells you whether it is struggling. They disagree more often
+          than people expect.
+        </p>
+
+        <h3>What it needs</h3>
+        <p>
+          Connection-pool metrics from HikariCP, Spring JDBC or Tomcat JDBC on the application side.
+          Optionally a <code>postgres_exporter</code> or <code>mysqld_exporter</code> job for the
+          server side, chosen from the dropdown on the card.
+        </p>
+
+        <h3>What it checks</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Check</th>
+                <th>Finding at</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Pool utilisation</td>
+                <td>
+                  <strong>Acting up</strong> at ≥&nbsp;90% · <strong>Worth a look</strong> at
+                  ≥&nbsp;70% · <strong>Needs attention</strong> if it ever hits 99%
+                </td>
+              </tr>
+              <tr>
+                <td>Threads waiting</td>
+                <td>
+                  <strong>Acting up</strong> at ≥&nbsp;5 queued · <strong>Worth a look</strong> at
+                  ≥&nbsp;1
+                </td>
+              </tr>
+              <tr>
+                <td>Connection timeouts</td>
+                <td><strong>Acting up</strong> at ≥&nbsp;1 in the window</td>
+              </tr>
+              <tr>
+                <td>Time acquiring a connection</td>
+                <td>
+                  <strong>Needs attention</strong> at ≥&nbsp;100ms · <strong>Worth a look</strong> at
+                  ≥&nbsp;10ms
+                </td>
+              </tr>
+              <tr>
+                <td>Query time</td>
+                <td>
+                  <strong>Needs attention</strong> at ≥&nbsp;1s average ·
+                  <strong>Worth a look</strong> at ≥&nbsp;100ms
+                </td>
+              </tr>
+              <tr>
+                <td>Server connections</td>
+                <td>
+                  <strong>Acting up</strong> at ≥&nbsp;90% of <code>max_connections</code> ·
+                  <strong>Worth a look</strong> at ≥&nbsp;70%
+                </td>
+              </tr>
+              <tr>
+                <td>Buffer cache hit ratio</td>
+                <td><strong>Worth a look</strong> below 90%</td>
+              </tr>
+              <tr>
+                <td>Deadlocks</td>
+                <td><strong>Needs attention</strong> at ≥&nbsp;1 in the window</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          <strong>Threads waiting is the clearest single signal.</strong> A pool at 100% with nothing
+          queued is fine — it is fully utilised. A pool with threads queued means requests are doing
+          nothing but waiting, and raising the pool size usually fixes it outright. Check the
+          server-side panels before you do: if the database is also near its connection limit, a
+          bigger pool makes things worse.
+        </p>
+
+        <h2 id="redis">Is this app hammering Redis?</h2>
+
+        <p>
+          Redis is almost never slow on its own. When it looks slow it is usually the application
+          calling it far more than it needs to, one expensive command blocking the single thread, or
+          memory pressure quietly evicting the keys the cache exists to hold.
+        </p>
+
+        <h3>What it needs</h3>
+        <p>
+          A <code>redis_exporter</code> job for the server side. Application-side latency comes from
+          Lettuce or the OpenTelemetry client instrumentation, and is worth having — comparing the
+          two tells you whether time is going into Redis or into the network and client queue.
+        </p>
+
+        <h3>What it checks</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Check</th>
+                <th>Finding at</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Cache hit ratio</td>
+                <td>
+                  <strong>Needs attention</strong> below 50% · <strong>Worth a look</strong> below
+                  80%
+                </td>
+              </tr>
+              <tr>
+                <td>Memory against maxmemory</td>
+                <td>
+                  <strong>Acting up</strong> at ≥&nbsp;90% · <strong>Worth a look</strong> at
+                  ≥&nbsp;75% · flagged if no limit is set at all
+                </td>
+              </tr>
+              <tr>
+                <td>Evictions</td>
+                <td>
+                  <strong>Acting up</strong> at ≥&nbsp;100 keys/sec · <strong>Worth a look</strong>
+                  at any eviction
+                </td>
+              </tr>
+              <tr>
+                <td>Blocking commands</td>
+                <td>
+                  <strong>Needs attention</strong> when <code>KEYS</code>, <code>FLUSHALL</code>,
+                  <code>SMEMBERS</code>, <code>HGETALL</code> or <code>SORT</code> exceed 0.1
+                  calls/sec
+                </td>
+              </tr>
+              <tr>
+                <td>Time per command</td>
+                <td><strong>Needs attention</strong> at ≥&nbsp;10ms inside Redis</td>
+              </tr>
+              <tr>
+                <td>Client-side latency</td>
+                <td><strong>Needs attention</strong> at ≥&nbsp;50ms as measured by the app</td>
+              </tr>
+              <tr>
+                <td>Rejected connections</td>
+                <td><strong>Acting up</strong> at ≥&nbsp;1 in the window</td>
+              </tr>
+              <tr>
+                <td>Connected clients</td>
+                <td><strong>Worth a look</strong> above 5,000</td>
+              </tr>
+              <tr>
+                <td>Command throughput</td>
+                <td><strong>Worth a look</strong> above 50,000 commands/sec</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          <strong>Redis commands are measured in microseconds.</strong> Milliseconds means the
+          command is scanning a large structure, and while it does, every other client waits behind
+          it. That is why the blocking-command check fires at a rate as low as one call every ten
+          seconds.
+        </p>
+
+        <nav class="pager">
+          <a href="guide.html">
+            <span class="dir">Previous</span>
+            <span class="to">← Walkthrough</span>
+          </a>
+          <a href="reference.html">
+            <span class="dir">Next</span>
+            <span class="to">Reference →</span>
+          </a>
+        </nav>
+      </main>
+    </div>
+
+    <script src="assets/docs.js" defer></script>
+  </body>
+</html>

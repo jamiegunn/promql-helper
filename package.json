@@ -1,0 +1,37 @@
+{
+  "name": "promql-helper",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A diagnostic wizard for Prometheus: pick a question about your system, get the answer.",
+  "scripts": {
+    "dev": "concurrently -n server,web -c cyan,magenta \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "tsx watch src/server/index.ts",
+    "dev:web": "vite",
+    "build": "vite build",
+    "start": "NODE_ENV=production tsx src/server/index.ts",
+    "fixture": "tsx scripts/fake-exporters.ts",
+    "prometheus": "docker run --rm -p 9090:9090 -v \"$PWD/scripts/prometheus.yml:/etc/prometheus/prometheus.yml\" prom/prometheus --config.file=/etc/prometheus/prometheus.yml",
+    "demo": "concurrently -n fixture,prom,server,web -c yellow,red,cyan,magenta \"npm:fixture\" \"npm:prometheus\" \"npm:dev:server\" \"npm:dev:web\"",
+    "typecheck": "tsc --noEmit",
+    "docs:serve": "python3 -m http.server 8090 --directory docs",
+    "docs:shots": "node scripts/capture-docs-shots.mjs",
+    "docs:verify": "node scripts/verify-docs.mjs"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "hono": "^4.6.14",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  }
+}

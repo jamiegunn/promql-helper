@@ -1,0 +1,845 @@
+/* ===========================================================================
+   PromQL Helper — documentation
+   ---------------------------------------------------------------------------
+   Field manual for an instrument. The page stays deliberately quiet so the one
+   loud thing is the hero, which is a working specimen of what the product
+   actually outputs. Severity colours are inherited unchanged from the app,
+   because the docs teach that vocabulary by using it.
+   =========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  --paper: #faf9f5;
+  --panel: #ffffff;
+  --ink: #17170f;
+  --ink-2: #56554c;
+  --ink-3: #8c8a7e;
+  --rule: #e4e1d6;
+  --rule-strong: #cfcbbc;
+  --accent: #1b5aa8;
+  --accent-wash: rgba(27, 90, 168, 0.08);
+
+  /* The product's reserved status scale. Never used for anything decorative. */
+  --good: #0ca30c;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+
+  --display: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+  --body: 'Instrument Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --measure: 74ch;
+  --sidebar: 208px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --paper: #111110;
+    --panel: #1a1a19;
+    --ink: #f6f5ef;
+    --ink-2: #b8b6aa;
+    --ink-3: #8a887d;
+    --rule: #2b2b28;
+    --rule-strong: #3d3d38;
+    --accent: #6aa9f0;
+    --accent-wash: rgba(106, 169, 240, 0.12);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 2rem;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* --- Skip link & focus ---------------------------------------------------- */
+
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 0.6rem 1rem;
+  z-index: 100;
+  border-radius: 0 0 6px 0;
+}
+.skip:focus {
+  left: 0;
+}
+
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/* --- Shell ---------------------------------------------------------------- */
+
+.layout {
+  display: grid;
+  grid-template-columns: var(--sidebar) minmax(0, 1fr);
+  gap: 3.5rem;
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 0 2rem 8rem;
+}
+
+.rail {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 2.5rem 0;
+}
+
+.mark {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  margin-bottom: 2.25rem;
+}
+
+.mark-name {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  display: block;
+}
+
+.mark-sub {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  display: block;
+  margin-top: 0.3rem;
+}
+
+.rail-group {
+  margin-bottom: 1.75rem;
+}
+
+.rail-label {
+  font-family: var(--mono);
+  font-size: 0.63rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 0.6rem;
+}
+
+.rail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-left: 1px solid var(--rule);
+}
+
+.rail-list a {
+  display: block;
+  padding: 0.28rem 0 0.28rem 0.85rem;
+  margin-left: -1px;
+  border-left: 2px solid transparent;
+  color: var(--ink-2);
+  text-decoration: none;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.rail-list a:hover {
+  color: var(--ink);
+}
+
+.rail-list a[aria-current='page'],
+.rail-list a.is-active {
+  color: var(--ink);
+  border-left-color: var(--accent);
+  font-weight: 500;
+}
+
+/* --- Typography ----------------------------------------------------------- */
+
+main {
+  padding-top: 2.5rem;
+  max-width: var(--measure);
+}
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 0.9rem;
+}
+
+h1 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(2.1rem, 5vw, 3.1rem);
+  line-height: 1.04;
+  letter-spacing: -0.032em;
+  margin: 0 0 1rem;
+  font-variation-settings: 'opsz' 48;
+}
+
+h2 {
+  font-family: var(--display);
+  font-weight: 650;
+  font-size: clamp(1.4rem, 3vw, 1.75rem);
+  line-height: 1.18;
+  letter-spacing: -0.022em;
+  margin: 3.5rem 0 0.9rem;
+  padding-top: 1.6rem;
+  border-top: 1px solid var(--rule);
+}
+
+h2:first-of-type {
+  margin-top: 2.75rem;
+}
+
+h3 {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 1.12rem;
+  letter-spacing: -0.012em;
+  margin: 2.25rem 0 0.55rem;
+}
+
+h4 {
+  font-family: var(--body);
+  font-weight: 600;
+  font-size: 0.97rem;
+  margin: 1.6rem 0 0.4rem;
+}
+
+p,
+li {
+  color: var(--ink-2);
+}
+
+p {
+  margin: 0 0 1.05rem;
+}
+
+.lede {
+  font-size: 1.16rem;
+  line-height: 1.55;
+  color: var(--ink-2);
+  margin-bottom: 2rem;
+}
+
+strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+a {
+  color: var(--accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+ul,
+ol {
+  padding-left: 1.15rem;
+  margin: 0 0 1.05rem;
+}
+
+li {
+  margin-bottom: 0.35rem;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.855em;
+  background: var(--accent-wash);
+  color: var(--ink);
+  padding: 0.1em 0.36em;
+  border-radius: 3px;
+}
+
+pre {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 1rem 1.15rem;
+  overflow-x: auto;
+  margin: 0 0 1.25rem;
+  line-height: 1.6;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.83rem;
+  color: var(--ink-2);
+}
+
+pre code .c {
+  color: var(--ink-3);
+}
+pre code .k {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+kbd {
+  font-family: var(--mono);
+  font-size: 0.78em;
+  border: 1px solid var(--rule-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0.1em 0.4em;
+  background: var(--panel);
+  color: var(--ink);
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 3rem 0;
+}
+
+/* --- Hero: a working specimen of the product's output --------------------- */
+
+.hero {
+  margin: 0 0 1rem;
+}
+
+.hero h1 {
+  max-width: 15ch;
+}
+
+/* The page's one loud element: a working specimen of what the product outputs.
+   Breaks out past the text measure so it reads as a figure, not a callout. */
+.specimen {
+  border: 1px solid var(--rule-strong);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 1.75rem 1.9rem 1.6rem;
+  margin: 1rem 0 2.25rem;
+  width: min(calc(100% + 5rem), 100vw - 4rem);
+}
+
+.specimen-q {
+  font-family: var(--display);
+  font-weight: 680;
+  font-size: clamp(1.35rem, 2.6vw, 1.7rem);
+  letter-spacing: -0.026em;
+  color: var(--ink);
+  line-height: 1.2;
+  margin: 0;
+}
+
+.specimen-meta {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0.55rem 0 0;
+}
+
+.specimen-rail {
+  margin: 1.35rem 0 1.4rem;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.4rem;
+}
+
+/* Three aligned columns so the arrows stack into a single spine — the
+   left side is what you ask for, the right is what exists in your Prometheus. */
+.specimen-rail li {
+  display: grid;
+  grid-template-columns: minmax(0, 13rem) 1.4rem minmax(0, 1fr);
+  align-items: baseline;
+  font-family: var(--mono);
+  font-size: 0.795rem;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.specimen-rail .from {
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+
+.specimen-rail .arrow {
+  color: var(--rule-strong);
+}
+
+.specimen-rail .to {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.specimen-verdict {
+  display: flex;
+  gap: 0.8rem;
+  align-items: flex-start;
+  border-top: 1px solid var(--rule);
+  padding-top: 1.2rem;
+}
+
+.specimen-verdict .glyph {
+  color: var(--serious);
+  font-size: 1.05rem;
+  line-height: 1.45;
+}
+
+.specimen-verdict .sev {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.63rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--serious) 78%, var(--ink));
+  margin-bottom: 0.2rem;
+}
+
+.specimen-verdict .said {
+  color: var(--ink);
+  font-size: 1.02rem;
+  line-height: 1.45;
+  font-weight: 500;
+}
+
+@media (max-width: 620px) {
+  .specimen {
+    padding: 1.35rem 1.25rem 1.25rem;
+  }
+
+  .specimen-rail li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0 0.5rem;
+    padding-left: 0.85rem;
+    border-left: 2px solid var(--rule);
+  }
+
+  .specimen-rail .arrow {
+    display: none;
+  }
+}
+
+.specimen-caption {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 1rem;
+}
+
+/* --- Steps: a genuine sequence, so numbering carries meaning -------------- */
+
+.steps {
+  list-style: none;
+  counter-reset: step;
+  padding: 0;
+  margin: 1.75rem 0 2rem;
+  display: grid;
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.steps li {
+  counter-increment: step;
+  background: var(--panel);
+  padding: 1.1rem 1.3rem 1.15rem 3.2rem;
+  position: relative;
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 1.3rem;
+  top: 1.15rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--ink-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: 50%;
+  width: 1.35rem;
+  height: 1.35rem;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+}
+
+.steps b {
+  color: var(--ink);
+  font-weight: 600;
+  display: block;
+  font-size: 0.97rem;
+  margin-bottom: 0.1rem;
+}
+
+/* --- Figures -------------------------------------------------------------- */
+
+figure {
+  margin: 1.75rem 0 2rem;
+  /* Break out past the text measure: screenshots need the width. */
+  width: min(calc(100% + 8rem), 100vw - 4rem);
+}
+
+figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  background: var(--panel);
+}
+
+figure.plain img {
+  border: 0;
+  border-radius: 0;
+}
+
+figcaption {
+  font-size: 0.845rem;
+  color: var(--ink-3);
+  margin-top: 0.65rem;
+  line-height: 1.5;
+  max-width: var(--measure);
+}
+
+/* --- Callouts, using the product's own severity vocabulary ---------------- */
+
+.note {
+  border: 1px solid var(--rule);
+  border-left-width: 3px;
+  border-radius: 0 8px 8px 0;
+  background: var(--panel);
+  padding: 0.95rem 1.15rem;
+  margin: 1.5rem 0;
+  font-size: 0.93rem;
+}
+
+.note p:last-child {
+  margin-bottom: 0;
+}
+
+.note-label {
+  font-family: var(--mono);
+  font-size: 0.63rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.note.tip {
+  border-left-color: var(--good);
+}
+.note.tip .note-label {
+  color: var(--good);
+}
+
+.note.watch {
+  border-left-color: var(--warning);
+}
+.note.watch .note-label {
+  color: color-mix(in srgb, var(--warning) 72%, var(--ink));
+}
+
+.note.limit {
+  border-left-color: var(--serious);
+}
+.note.limit .note-label {
+  color: color-mix(in srgb, var(--serious) 78%, var(--ink));
+}
+
+/* --- Severity key --------------------------------------------------------- */
+
+.severity-key {
+  list-style: none;
+  padding: 0;
+  margin: 1.5rem 0 2rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.severity-key li {
+  display: grid;
+  grid-template-columns: 1.4rem 8.5rem 1fr;
+  gap: 0.75rem;
+  align-items: baseline;
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.severity-key .glyph {
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.severity-key .word {
+  font-weight: 600;
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.sev-ok .glyph {
+  color: var(--good);
+}
+.sev-warning .glyph {
+  color: var(--warning);
+}
+.sev-serious .glyph {
+  color: var(--serious);
+}
+.sev-critical .glyph {
+  color: var(--critical);
+}
+.sev-unknown .glyph {
+  color: var(--ink-3);
+}
+
+/* --- Tables --------------------------------------------------------------- */
+
+.table-wrap {
+  overflow-x: auto;
+  margin: 1.4rem 0 1.9rem;
+  width: min(calc(100% + 6rem), 100vw - 4rem);
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.895rem;
+}
+
+th {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-weight: 500;
+  padding: 0 1.1rem 0.55rem 0;
+  border-bottom: 1px solid var(--rule-strong);
+  white-space: nowrap;
+}
+
+td {
+  padding: 0.65rem 1.1rem 0.65rem 0;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-2);
+  vertical-align: top;
+}
+
+td:first-child {
+  color: var(--ink);
+}
+
+td code,
+th code {
+  font-size: 0.86em;
+  white-space: nowrap;
+}
+
+/* --- Question cards ------------------------------------------------------- */
+
+.questions {
+  list-style: none;
+  padding: 0;
+  margin: 1.75rem 0 2rem;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.questions li {
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  background: var(--panel);
+  padding: 1.1rem 1.25rem;
+  margin: 0;
+}
+
+.questions .q {
+  font-family: var(--display);
+  font-weight: 620;
+  font-size: 1.04rem;
+  letter-spacing: -0.014em;
+  color: var(--ink);
+  display: block;
+  margin-bottom: 0.3rem;
+}
+
+.questions .a {
+  font-size: 0.91rem;
+  color: var(--ink-2);
+  display: block;
+}
+
+.questions .needs {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--ink-3);
+  display: block;
+  margin-top: 0.6rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--rule);
+  line-height: 1.5;
+}
+
+/* --- Next / prev ---------------------------------------------------------- */
+
+.pager {
+  display: flex;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+  margin-top: 4rem;
+  padding-top: 1.75rem;
+  border-top: 1px solid var(--rule);
+}
+
+.pager a {
+  flex: 1 1 15rem;
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  padding: 0.9rem 1.1rem;
+  text-decoration: none;
+  background: var(--panel);
+}
+
+.pager a:hover {
+  border-color: var(--rule-strong);
+}
+
+.pager .dir {
+  font-family: var(--mono);
+  font-size: 0.63rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.pager .to {
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 0.97rem;
+}
+
+/* --- Reveal on scroll (progressive enhancement) --------------------------- */
+
+.reveal {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.reveal.shown {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.5s ease,
+    transform 0.5s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .reveal,
+  .reveal.shown {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* --- Responsive ----------------------------------------------------------- */
+
+@media (max-width: 880px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 0 1.25rem 5rem;
+  }
+
+  .rail {
+    position: static;
+    height: auto;
+    padding: 1.75rem 0 1.25rem;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 0.5rem;
+  }
+
+  .rail-nav {
+    display: flex;
+    gap: 1.75rem;
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+  }
+
+  .rail-group {
+    margin-bottom: 0;
+    flex: none;
+  }
+
+  .rail-list {
+    border-left: 0;
+    display: flex;
+    gap: 1rem;
+  }
+
+  .rail-list a {
+    padding: 0;
+    border-left: 0;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+  }
+
+  .rail-list a[aria-current='page'],
+  .rail-list a.is-active {
+    border-left: 0;
+    border-bottom-color: var(--accent);
+  }
+
+  main {
+    padding-top: 1.5rem;
+  }
+
+  figure,
+  .table-wrap {
+    width: 100%;
+  }
+}
