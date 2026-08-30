@@ -75,5 +75,10 @@ export const config = {
   timeoutMs: Number(process.env.PROMETHEUS_TIMEOUT_MS ?? 30_000),
   catalogTtlMs: Number(process.env.CATALOG_TTL_SECONDS ?? 300) * 1000,
   port: Number(process.env.PORT ?? 8787),
+  /**
+   * Stop an existing PromQL Helper server holding the port instead of failing.
+   * Opt-in, because killing a process is not something to do by default.
+   */
+  takeoverPort: process.env.PORT_TAKEOVER === '1',
   isProduction: process.env.NODE_ENV === 'production',
 } as const

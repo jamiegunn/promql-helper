@@ -94,7 +94,20 @@
               <tr>
                 <td><code>PORT</code></td>
                 <td><code>8787</code></td>
-                <td>Port the API listens on.</td>
+                <td>
+                  Port the API listens on. The Vite dev server reads it too, so
+                  <code>PORT=8788 npm run dev</code> runs a second instance whose UI talks to its
+                  own API.
+                </td>
+              </tr>
+              <tr>
+                <td><code>PORT_TAKEOVER</code></td>
+                <td><code>0</code></td>
+                <td>
+                  Set to <code>1</code> to stop an existing server holding that port instead of
+                  failing. Only stops a server started from the same directory.
+                  <code>npm run dev:takeover</code> sets it for you.
+                </td>
               </tr>
               <tr>
                 <td><code>PROMETHEUS_TIMEOUT_MS</code></td>
@@ -273,6 +286,28 @@
         <p>
           The token is wrong or expired. If your Prometheus sits behind a proxy that wants a
           different header entirely, use <code>PROMETHEUS_HEADERS</code> instead.
+        </p>
+
+        <h3>"Port 8787 is already in use"</h3>
+        <p>
+          Something already holds the port — usually a server you left running in another terminal.
+          The message names the process and gives you three ways out:
+          <code>npm run dev:takeover</code> stops it and takes the port,
+          <code>PORT=8788 npm run dev</code> runs alongside it on its own port, or you stop it
+          yourself with the <code>kill</code> command shown.
+        </p>
+        <p>
+          Takeover only ever stops a server started from the same directory. If the port belongs to
+          anything else it is reported and left running, even with
+          <code>PORT_TAKEOVER=1</code> set. And if the port is grabbed again immediately after being
+          freed, something is supervising it — usually another <code>npm run dev</code> — so stop
+          that terminal rather than the child process.
+        </p>
+
+        <h3>Vite says "Port 5173 is in use, trying another one"</h3>
+        <p>
+          Harmless. Vite steps to the next free port and prints the real one; its API proxy is
+          unaffected. Open whichever URL it prints.
         </p>
 
         <h3>The first page load is slow</h3>

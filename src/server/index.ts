@@ -14,6 +14,13 @@ import {
   narrowingValuesFor,
 } from './catalog.ts'
 import { offerInvestigations, runInvestigation } from './engine.ts'
+import {
+  PortUnavailable,
+  describePortOwner,
+  explainPortConflict,
+  isPortFree,
+  takeOverPort,
+} from './port.ts'
 import { TIME_RANGES } from '../shared/types.ts'
 import type { ConnectionStatus, TargetFilter, TargetSelection, TimeRangeId } from '../shared/types.ts'
 
@@ -122,10 +129,47 @@ if (config.isProduction && existsSync(webRoot)) {
   app.get('*', (c) => c.html(readFileSync(resolve(webRoot, 'index.html'), 'utf8')))
 }
 
-serve({ fetch: app.fetch, port: config.port }, (info) => {
-  const where = config.isProduction ? `http://localhost:${info.port}` : 'http://localhost:5173'
-  console.log(`\n  PromQL Helper`)
-  console.log(`  Prometheus  ${config.prometheusUrl}${config.hasToken ? '  (bearer token set)' : '  (no token)'}`)
-  console.log(`  API         http://localhost:${info.port}`)
-  console.log(`  Open        ${where}\n`)
+/**
+ * Binds the port, but explains itself first if something else already has it.
+ * A raw EADDRINUSE stack trace tells you nothing about which process to stop.
+ */
+async function start(): Promise<void> {
+  if (!(await isPortFree(config.port))) {
+    if (!config.takeoverPort) {
+      console.error(explainPortConflict(config.port, describePortOwner(config.port)))
+      process.exit(1)
+    }
+
+    try {
+      const stopped = await takeOverPort(config.port)
+      console.log(`\n  Stopped the server already on port ${config.port} (PID ${stopped.pid}).`)
+    } catch (err) {
+      if (err instanceof PortUnavailable) {
+        console.error(explainPortConflict(err.port, err.owner, err.detail))
+        process.exit(1)
+      }
+      throw err
+    }
+  }
+
+  serve({ fetch: app.fetch, port: config.port }, (info) => {
+    // In dev the UI is served by Vite, which steps to the next free port if
+    // 5173 is taken — so point at the port Vite actually reports rather than
+    // assuming, and let the API port speak for itself.
+    console.log(`\n  PromQL Helper`)
+    console.log(
+      `  Prometheus  ${config.prometheusUrl}${config.hasToken ? '  (bearer token set)' : '  (no token)'}`,
+    )
+    console.log(`  API         http://localhost:${info.port}`)
+    console.log(
+      config.isProduction
+        ? `  Open        http://localhost:${info.port}\n`
+        : `  Open        the URL Vite prints below (5173 unless it is taken)\n`,
+    )
+  })
+}
+
+start().catch((err: unknown) => {
+  console.error(`\n  Could not start: ${err instanceof Error ? err.message : String(err)}\n`)
+  process.exit(1)
 })

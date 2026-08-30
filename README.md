@@ -33,6 +33,38 @@ npm run build
 npm start                 # everything on :8787
 ```
 
+### When the port is already taken
+
+If something already holds `PORT`, the server says what has it and stops rather
+than dumping a stack trace:
+
+```
+  Port 8787 is already in use.
+
+  Held by  PID 79324 — node src/server/index.ts
+           another PromQL Helper server from this directory
+
+  What you can do:
+
+    npm run dev:takeover     stop it and take the port
+    PORT=8788 npm run dev    run this one alongside it, on its own port
+    kill 79324               stop it yourself
+```
+
+`npm run dev:takeover` stops the old server and takes the port. It only ever
+stops a server started from this same directory — anything else is reported and
+left running, even with takeover enabled.
+
+### Running more than one instance
+
+Set `PORT`. The Vite dev server reads the same variable, so its API proxy
+follows automatically, and Vite steps to the next free UI port on its own:
+
+```bash
+npm run dev                 # API :8787, UI :5173
+PORT=8788 npm run dev       # API :8788, UI :5174 — talks to its own API
+```
+
 ### Configuration
 
 Only two variables matter:
