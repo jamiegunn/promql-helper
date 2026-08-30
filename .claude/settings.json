@@ -30,6 +30,8 @@
       "Bash(ps *)",
       "Bash(pkill *)",
       "Bash(kill *)",
+      "Bash(nohup *)",
+      "Bash(sleep *)",
       "Bash(python3 *)",
       "Bash(grep *)",
       "Bash(rg *)",
